@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import sys
+from modules.fuzzer import run_differential_fuzzer
 
 def banner():
     print("""
@@ -9,10 +10,6 @@ def banner():
        Next-Gen WAF Evasion & Differential Fuzzer
     ================================================
     """)
-
-def run_differential_fuzzer(target):
-    print(f"[*] Initializing Differential Engine against: {target}")
-    print("[-] Module 'fuzz' not yet implemented. Please check back in v1.1.\n")
 
 def run_neuro_camouflage(payload):
     print(f"[*] Applying Adversarial AI Noise to payload: {payload}")
