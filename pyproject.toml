@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wafmancer"
+version = "1.0.0-dev"
+description = "Next-Generation WAF Evasion Research Framework with Response Oracle Technology"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Your Name", email = "your@email.com"}
+]
+keywords = ["security", "waf", "evasion", "research", "zero-day"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "httpx[http2]>=0.27.0",
+    "rich>=13.7.0",
+    "pyyaml>=6.0",
+    "structlog>=24.1.0",
+    "aioquic>=1.2.0",
+    "click>=8.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
+    "black>=24.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+wafmancer = "wafmancer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["wafmancer*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
