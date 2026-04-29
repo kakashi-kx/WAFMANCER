@@ -1,0 +1,33 @@
+# WAFMANCER Configuration
+# ========================
+
+target:
+  timeout: 10.0
+  max_redirects: 5
+  verify_ssl: true
+  user_agent: "Wafmancer-Research/2.0"
+
+oracle:
+  max_probes: 100
+  concurrency: 10
+  probe_delay: 0.1
+  decision_threshold: 0.95
+  research_mode: true
+
+logging:
+  level: "INFO"
+  format: "json"
+  output_dir: "logs"
+  save_requests: true
+  save_responses: true
+
+plugins:
+  enabled:
+    - "fuzzer"
+  load_paths:
+    - "wafmancer.plugins"
+
+output:
+  research_dir: "research"
+  data_dir: "data"
+  report_format: "markdown"
