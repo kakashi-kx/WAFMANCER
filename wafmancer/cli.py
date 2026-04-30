@@ -24,7 +24,7 @@ from wafmancer.config import config
 from wafmancer.core.oracle import ResponseOracle
 from wafmancer.core.research_store import ResearchStore
 from wafmancer.utils.helpers import normalize_target_url
-from wafmancer.core.neuro_camouflage import NeuroCamouflage
+from wafmancer.core.neural_exploit import NeuralExploitSynthesis
 
 console = Console()
 
@@ -474,12 +474,7 @@ def neuro(payload, population, generations, mutation_rate, target_score, output)
     """
     display_banner()
     
-    neuro_engine = NeuroCamouflage(
-        population_size=population,
-        generations=generations,
-        mutation_rate=mutation_rate,
-        target_score=target_score,
-    )
+    neuro_engine = NeuralExploitSynthesis(waf_vendor=None)
     
     console.print(Panel(
         Text.from_markup(
@@ -826,6 +821,93 @@ def bounty(target_file, probes, concurrency, delay, output):
     
     display_footer()
 
+@main.command()
+@click.option("-p", "--payload", required=True, help="Payload or attack intent")
+@click.option("--waf", default=None, help="Target WAF vendor (Cloudflare, AWS WAF, etc.)")
+@click.option("-s", "--surface", default=None, 
+              type=click.Choice(["html_injection", "javascript_execution", "sql_query", 
+                                 "file_path", "system_command"]),
+              help="Attack surface")
+@click.option("-o", "--output", default=None, help="Output file for report")
+def neural(payload, waf, surface, output):
+    """
+    Neural Exploit Synthesis — AI-powered payload generation.
+    
+    Synthesizes novel attack payloads using WAF-specific
+    multi-vector chaining and ML blindspot exploitation.
+    """
+    display_banner()
+    
+    engine = NeuralExploitSynthesis(waf_vendor=waf)
+    
+    console.print(Panel(
+        Text.from_markup(
+            f"[{C.TEAL}]► Payload:[/] [{C.WHITE}]{payload[:80]}[/]\n"
+            f"[{C.TEAL}]► WAF Target:[/] [{C.RED}]{waf or 'Generic'}[/]\n"
+            f"[{C.TEAL}]► Surface:[/] [{C.PURPLE}]{surface or 'Auto-detect'}[/]"
+        ),
+        border_style=C.PURPLE,
+        box=HEAVY,
+        padding=(1, 3),
+        title="[bold]🧠 NEURAL EXPLOIT SYNTHESIS[/]",
+        title_align="center",
+    ))
+    
+    try:
+        with console.status(f"[{C.PURPLE}]Synthesizing payloads...[/]", spinner="dots"):
+            results = engine.synthesize(payload, surface)
+        
+        console.print()
+        console.print(Panel(
+            Text.from_markup(
+                f"[{C.SILVER}]▸ Best Score:[/] [{C.GREEN}]{results['best_score']:.3f}[/]\n"
+                f"[{C.SILVER}]▸ Bypass Probability:[/] [{C.GREEN}]{results['best_bypass_probability']:.1%}[/]\n"
+                f"[{C.SILVER}]▸ Techniques:[/] [{C.TEAL}]{', '.join(results['techniques_used'])}[/]"
+            ),
+            border_style=C.GREEN,
+            box=ROUNDED,
+            padding=(1, 3),
+            title="[bold]◆ SYNTHESIS RESULTS ◆[/]",
+            title_align="center",
+        ))
+        
+        if results.get("best_payload"):
+            console.print()
+            console.print(Panel(
+                Text(results["best_payload"][:500], style=C.WHITE),
+                border_style=C.TEAL,
+                box=ROUNDED,
+                padding=(1, 2),
+                title="[bold]◇ BEST SYNTHESIZED PAYLOAD ◇[/]",
+                title_align="left",
+            ))
+        
+        console.print()
+        gen_table = Table(title="All Generations", border_style=C.DIM, box=ROUNDED)
+        gen_table.add_column("#", style=C.DIM)
+        gen_table.add_column("Score", style=C.RED)
+        gen_table.add_column("Bypass %", style=C.GREEN)
+        gen_table.add_column("Techniques", style=C.TEAL)
+        
+        for gen in results["generations"]:
+            gen_table.add_row(
+                str(gen["id"]),
+                f"{gen['confidence_score']:.3f}",
+                f"{gen['bypass_probability']:.1%}",
+                ", ".join(gen["techniques"][:3]),
+            )
+        
+        console.print(gen_table)
+        
+        report = engine.generate_report(results)
+        if output:
+            Path(output).write_text(report)
+            console.print(f"\n[{C.GREEN}]◈ Report saved:[/] [{C.DIM}]{output}[/]")
+        
+    except Exception as e:
+        console.print(f"\n[{C.RED}]◈ Error:[/] {e}")
+    
+    display_footer()
 
 if __name__ == "__main__":
     main()
