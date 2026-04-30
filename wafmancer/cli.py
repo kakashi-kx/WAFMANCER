@@ -24,6 +24,7 @@ from wafmancer.config import config
 from wafmancer.core.oracle import ResponseOracle
 from wafmancer.core.research_store import ResearchStore
 from wafmancer.utils.helpers import normalize_target_url
+from wafmancer.core.neuro_camouflage import NeuroCamouflage
 
 console = Console()
 
@@ -458,85 +459,107 @@ def main():
 
 
 @main.command()
-@click.option("-t", "--target", required=True, help="Target URL to analyze")
-@click.option("--probes", default=None, type=int, help="Maximum number of probes")
-@click.option("--concurrency", default=None, type=int, help="Maximum concurrent probes")
-@click.option("--output", "-o", default=None, help="Output file for research report")
-@click.option("--no-save", is_flag=True, help="Skip database save")
-def oracle(target, probes, concurrency, output, no_save):
+@click.option("-p", "--payload", required=True, help="Malicious payload to camouflage")
+@click.option("--population", default=30, type=int, help="Population size per generation")
+@click.option("--generations", default=50, type=int, help="Maximum generations")
+@click.option("--mutation-rate", default=0.3, type=float, help="Mutation rate (0.0-1.0)")
+@click.option("--target-score", default=0.15, type=float, help="Target detection score")
+@click.option("-o", "--output", default=None, help="Output file for report")
+def neuro(payload, population, generations, mutation_rate, target_score, output):
     """
-    Run the Response Oracle against a target.
+    Neuro-Camouflage — AI-powered payload evasion.
     
-    Maps WAF decision boundaries through systematic probing
-    with fingerprinting and targeted mutation generation.
+    Evolves a malicious payload through genetic algorithms and
+    benign token injection to bypass ML-based WAF detection.
     """
     display_banner()
     
-    target_url = normalize_target_url(target)
+    neuro_engine = NeuroCamouflage(
+        population_size=population,
+        generations=generations,
+        mutation_rate=mutation_rate,
+        target_score=target_score,
+    )
     
-    if probes:
-        config._config["oracle"]["max_probes"] = probes
-    if concurrency:
-        config._config["oracle"]["concurrency"] = concurrency
+    console.print(Panel(
+        Text.from_markup(
+            f"[{C.TEAL}]► Payload:[/] [{C.WHITE}]{payload[:80]}{'...' if len(payload) > 80 else ''}[/]\n"
+            f"[{C.TEAL}]► Population:[/] [{C.GREEN}]{population}[/]\n"
+            f"[{C.TEAL}]► Generations:[/] [{C.ORANGE}]{generations}[/]\n"
+            f"[{C.TEAL}]► Mutation Rate:[/] [{C.PURPLE}]{mutation_rate:.0%}[/]\n"
+            f"[{C.TEAL}]► Target Score:[/] [{C.RED}]≤{target_score:.2f}[/]"
+        ),
+        border_style=C.PURPLE,
+        box=HEAVY,
+        padding=(1, 3),
+        title="[bold]🧠 NEURO-CAMOUFLAGE ACTIVE[/]",
+        title_align="center",
+    ))
     
-    actual_probes = probes or config.get("oracle", "max_probes", default=20)
-    display_scan_header(target_url, actual_probes)
-    
-    oracle_engine = ResponseOracle(target_url)
-    
-    async def run():
-        return await oracle_engine.run()
+    async def run_neuro():
+        return await neuro_engine.camouflage(payload)
     
     try:
-        with console.status(
-            f"[{C.PURPLE}]◈ Oracle analyzing target...[/]", 
-            spinner="dots"
-        ):
-            session = asyncio.run(run())
-        
-        # Display fingerprint
-        if session.waf_fingerprint:
-            display_waf_fingerprint(session.waf_fingerprint)
+        with console.status(f"[{C.PURPLE}]🧠 Evolving payload...[/]", spinner="dots"):
+            results = asyncio.run(run_neuro())
         
         # Display results
-        display_results_table(session.statistics)
+        original_score = results["original_detection_score"]
+        best_score = results["best_score"]
+        improvement = results["improvement_percent"]
         
-        # Display anomalies
-        display_anomaly_details(
-            session.anomalies,
-            waf_bypass_suggestions=(
-                session.waf_fingerprint.suggested_mutations 
-                if session.waf_fingerprint else None
+        # Score comparison
+        console.print()
+        console.print(Panel(
+            Text.from_markup(
+                f"[{C.SILVER}]▸ Original Score:[/]   [{C.RED}]{original_score:.3f}[/]\n"
+                f"[{C.SILVER}]▸ Best Score:[/]       [{C.GREEN}]{best_score:.3f}[/]\n"
+                f"[{C.SILVER}]▸ Improvement:[/]      [{C.GOLD}]{improvement:.1f}%[/]"
             ),
-            known_vulns=(
-                session.waf_fingerprint.known_vulnerabilities 
-                if session.waf_fingerprint else None
-            ),
-        )
+            border_style=C.GREEN if improvement > 50 else C.ORANGE,
+            box=ROUNDED,
+            padding=(1, 3),
+            title=f"[bold {C.GREEN}]◆ EVASION RESULTS ◆[/]",
+            title_align="center",
+        ))
+        
+        # Show best payload
+        if results.get("best_payload"):
+            console.print()
+            console.print(Panel(
+                Text(results["best_payload"][:500], style=C.WHITE),
+                border_style=C.TEAL,
+                box=ROUNDED,
+                padding=(1, 2),
+                title=f"[bold {C.TEAL}]◇ BEST CAMOUFLAGED PAYLOAD ◇[/]",
+                title_align="left",
+            ))
+        
+        # Evolution stats
+        if results.get("evolution_result"):
+            evo = results["evolution_result"]
+            console.print()
+            console.print(Panel(
+                Text.from_markup(
+                    f"[{C.SILVER}]▸ Generations:[/]   [{C.GREEN}]{evo['generations']}[/]\n"
+                    f"[{C.SILVER}]▸ Mutations:[/]     [{C.ORANGE}]{evo['total_mutations']}[/]\n"
+                    f"[{C.SILVER}]▸ Time:[/]          [{C.DIM}]{evo['time_elapsed']:.2f}s[/]"
+                ),
+                border_style=C.PURPLE,
+                box=ROUNDED,
+                padding=(1, 2),
+                title=f"[bold {C.PURPLE}]◇ EVOLUTION STATS ◇[/]",
+                title_align="left",
+            ))
         
         # Generate and save report
-        report = oracle_engine.generate_report()
-        report_dir = Path(config.get("output", "research_dir", default="research"))
-        report_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        report_path = report_dir / f"report_{timestamp}.md"
-        report_path.write_text(report)
-        
-        # Save to database
-        session_id = None
-        if not no_save:
-            try:
-                store = ResearchStore()
-                session_id = store.save_session(session)
-                store.close()
-            except Exception:
-                pass
-        
-        display_save_confirmation(session_id or 0, str(report_path))
+        report = neuro_engine.generate_report(results)
+        if output:
+            Path(output).write_text(report)
+            console.print(f"\n[{C.GREEN}]◈ Report saved:[/] [{C.DIM}]{output}[/]")
         
     except Exception as e:
         console.print(f"\n[{C.RED}]◈ Error:[/] {e}")
-        sys.exit(1)
     
     display_footer()
 
