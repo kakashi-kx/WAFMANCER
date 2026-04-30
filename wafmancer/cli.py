@@ -25,6 +25,7 @@ from wafmancer.core.oracle import ResponseOracle
 from wafmancer.core.research_store import ResearchStore
 from wafmancer.utils.helpers import normalize_target_url
 from wafmancer.core.neural_exploit import NeuralExploitSynthesis
+from wafmancer.core.trust_corruptor import TrustCorruptor
 
 console = Console()
 
@@ -903,6 +904,174 @@ def neural(payload, waf, surface, output):
         if output:
             Path(output).write_text(report)
             console.print(f"\n[{C.GREEN}]◈ Report saved:[/] [{C.DIM}]{output}[/]")
+        
+    except Exception as e:
+        console.print(f"\n[{C.RED}]◈ Error:[/] {e}")
+    
+    display_footer()
+
+@main.command()
+@click.option("-t", "--target", required=True, help="Target URL")
+@click.option("-p", "--payload", required=True, help="Malicious payload to deliver")
+@click.option("--waf", default=None, help="Target WAF vendor (auto-detect if not specified)")
+@click.option("--requests", default=20, type=int, help="Max benign requests for trust building")
+@click.option("--no-synthesize", is_flag=True, help="Skip neural payload synthesis")
+@click.option("-o", "--output", default=None, help="Output file for full report")
+def corrupt(target, payload, waf, requests, no_synthesize, output):
+    """
+    Trust Corruptor — Deliver payloads at peak WAF trust.
+    
+    Maps WAF reputation decay curve, builds trust through
+    benign requests, and injects payload at optimal trust window.
+    Generates PoC code and tactical intelligence report.
+    """
+    display_banner()
+    
+    console.print(Panel(
+        Text.from_markup(
+            f"[{C.TEAL}]► Target:[/] [{C.WHITE}]{target}[/]\n"
+            f"[{C.TEAL}]► Payload:[/] [{C.RED}]{payload[:60]}...[/]\n"
+            f"[{C.TEAL}]► WAF:[/] [{C.ORANGE}]{waf or 'Auto-detect'}[/]\n"
+            f"[{C.TEAL}]► Trust Requests:[/] [{C.GREEN}]{requests}[/]\n"
+            f"[{C.TEAL}]► Synthesize:[/] [{C.GREEN if not no_synthesize else C.RED}]{'Yes' if not no_synthesize else 'No'}[/]"
+        ),
+        border_style=C.PURPLE,
+        box=HEAVY,
+        padding=(1, 3),
+        title="[bold]🔥 TRUST CORRUPTOR ACTIVE[/]",
+        title_align="center",
+    ))
+    
+    corruptor = TrustCorruptor(target, waf_vendor=waf)
+    
+    async def run_corrupt():
+        return await corruptor.corrupt(
+            payload,
+            max_benign_requests=requests,
+            synthesize_first=not no_synthesize,
+        )
+    
+    try:
+        with console.status(f"[{C.PURPLE}]Mapping trust decay curve...[/]", spinner="dots"):
+            results = asyncio.run(run_corrupt())
+        
+        # WAF Profile
+        if results.get("tactical_profile"):
+            profile = results["tactical_profile"]
+            console.print()
+            console.print(Panel(
+                Text.from_markup(
+                    f"[{C.SILVER}]▸ Vendor:[/] [{C.RED}]{profile.get('vendor', 'Unknown')}[/]\n"
+                    f"[{C.SILVER}]▸ Mode:[/] [{C.ORANGE}]{profile.get('mode', 'unknown').upper()}[/]\n"
+                    f"[{C.SILVER}]▸ Reputation:[/] [{'green' if profile.get('reputation_based') else 'red'}]{'YES' if profile.get('reputation_based') else 'NO'}[/]\n"
+                    f"[{C.SILVER}]▸ Difficulty:[/] [{C.RED}]{profile.get('bypass_difficulty', 'Unknown')}[/]"
+                ),
+                border_style=C.RED,
+                box=ROUNDED,
+                padding=(1, 3),
+                title="[bold]🎯 WAF TACTICAL PROFILE[/]",
+                title_align="center",
+            ))
+        
+        # Trust Curve
+        if results.get("trust_curve"):
+            curve = results["trust_curve"]
+            console.print()
+            console.print(Panel(
+                Text.from_markup(
+                    f"[{C.SILVER}]▸ Trust Threshold:[/] [{C.GREEN}]Request #{curve.trust_threshold}[/]\n"
+                    f"[{C.SILVER}]▸ Peak Trust:[/] [{C.GREEN}]{curve.peak_trust_score:.2f}[/]\n"
+                    f"[{C.SILVER}]▸ Injection Point:[/] [{C.GOLD}]Request #{curve.recommended_injection_point}[/]\n"
+                    f"[{C.SILVER}]▸ Time to Trust:[/] [{C.DIM}]{curve.time_to_trust:.1f}s[/]"
+                ),
+                border_style=C.BLUE,
+                box=ROUNDED,
+                padding=(1, 3),
+                title="[bold]📊 TRUST DECAY CURVE[/]",
+                title_align="center",
+            ))
+        
+        # Injection Result
+        if results.get("injection_result"):
+            inj = results["injection_result"]
+            bypass = inj["bypass_successful"]
+            result_color = C.GREEN if bypass else C.RED
+            result_text = "✅ BYPASS SUCCESSFUL" if bypass else "❌ BLOCKED"
+            
+            console.print()
+            console.print(Panel(
+                Text.from_markup(
+                    f"[{C.SILVER}]▸ Status:[/] [{result_color}]{inj['status_code']} — {result_text}[/]\n"
+                    f"[{C.SILVER}]▸ Response Length:[/] [{C.WHITE}]{inj['response_length']} bytes[/]\n"
+                    f"[{C.SILVER}]▸ Response Time:[/] [{C.WHITE}]{inj['response_time']:.3f}s[/]\n"
+                    f"[{C.SILVER}]▸ Trust at Injection:[/] [{C.GREEN}]{inj['trust_score_at_injection']:.2f}[/]"
+                ),
+                border_style=result_color,
+                box=ROUNDED,
+                padding=(1, 3),
+                title=f"[bold {result_color}]💉 INJECTION RESULT[/]",
+                title_align="center",
+            ))
+        
+        # Advantages & Disadvantages
+        if results.get("advantages") or results.get("disadvantages"):
+            console.print()
+            adv_dis = ""
+            if results.get("advantages"):
+                adv_dis += f"[{C.GREEN}]◆ ADVANTAGES:[/]\n"
+                for adv in results["advantages"][:3]:
+                    adv_dis += f"  [{C.GREEN}]✓[/] [{C.SILVER}]{adv}[/]\n"
+            if results.get("disadvantages"):
+                adv_dis += f"\n[{C.RED}]◆ DISADVANTAGES:[/]\n"
+                for dis in results["disadvantages"][:3]:
+                    adv_dis += f"  [{C.RED}]✗[/] [{C.SILVER}]{dis}[/]\n"
+            
+            console.print(Panel(
+                Text.from_markup(adv_dis),
+                border_style=C.ORANGE,
+                box=ROUNDED,
+                padding=(1, 2),
+                title="[bold]⚖️ TACTICAL ASSESSMENT[/]",
+                title_align="left",
+            ))
+        
+        # WAF Config Notes
+        if results.get("waf_config_notes"):
+            console.print()
+            console.print(Panel(
+                Text.from_markup(results["waf_config_notes"][:500]),
+                border_style=C.PURPLE,
+                box=ROUNDED,
+                padding=(1, 2),
+                title="[bold]🔧 WAF CONFIGURATION INTEL[/]",
+                title_align="left",
+            ))
+        
+        # Steps to Reproduce
+        if results.get("steps_to_reproduce"):
+            console.print()
+            steps_text = "\n".join(results["steps_to_reproduce"][:20])
+            console.print(Panel(
+                Text(steps_text, style=C.SILVER),
+                border_style=C.TEAL,
+                box=ROUNDED,
+                padding=(1, 2),
+                title="[bold]📋 STEPS TO REPRODUCE[/]",
+                title_align="left",
+            ))
+        
+        # Save full report
+        full_report = corruptor.generate_full_report(results)
+        report_path = Path(output) if output else Path("research") / f"trust_corruptor_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(full_report)
+        
+        # Save PoC
+        if results.get("poc_code"):
+            poc_path = report_path.with_suffix(".py")
+            poc_path.write_text(results["poc_code"])
+            console.print(f"\n[{C.GREEN}]◈ Full Report:[/] [{C.DIM}]{report_path}[/]")
+            console.print(f"[{C.GREEN}]◈ PoC Script:[/] [{C.DIM}]{poc_path}[/]")
         
     except Exception as e:
         console.print(f"\n[{C.RED}]◈ Error:[/] {e}")
