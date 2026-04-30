@@ -6,7 +6,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
 <!-- SCREENSHOT 1: Main banner and module list -->
- https://github.com/kakashi-kx/WAFMANCER/blob/main/screenshots/Screenshot_2026-04-30_20_21_30.png 
+ screenshots/Screenshot_2026-04-30_20_21_30.png
 
 <!-- SCREENSHOT 2: Oracle scanning a target -->
 <!-- Replace with: ![Oracle Scan](screenshots/oracle_scan.png) -->
