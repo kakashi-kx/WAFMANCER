@@ -1,10 +1,13 @@
 """
 WAFMANCER Command-Line Interface.
 Research-grade WAF evasion framework with Response Oracle Technology.
+
+crafted by :: kakashi4kx / kakashi-kx
 """
 
 import asyncio
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -13,34 +16,444 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from rich.align import Align
+from rich.box import ROUNDED, HEAVY
+from rich.columns import Columns
 
 from wafmancer.config import config
-from wafmancer.logging_config import setup_logging
 from wafmancer.core.oracle import ResponseOracle
 from wafmancer.core.research_store import ResearchStore
 from wafmancer.utils.helpers import normalize_target_url
 
 console = Console()
 
-BANNER = """
-╔══════════════════════════════════════════════════════════╗
-║  ██╗    ██╗ █████╗ ███████╗███╗   ███╗ █████╗ ███╗   ██╗ ██████╗███████╗██████╗  ║
-║  ██║    ██║██╔══██╗██╔════╝████╗ ████║██╔══██╗████╗  ██║██╔════╝██╔════╝██╔══██╗ ║
-║  ██║ █╗ ██║███████║█████╗  ██╔████╔██║███████║██╔██╗ ██║██║     █████╗  ██████╔╝ ║
-║  ██║███╗██║██╔══██║██╔══╝  ██║╚██╔╝██║██╔══██║██║╚██╗██║██║     ██╔══╝  ██╔══██╗ ║
-║  ╚███╔███╔╝██║  ██║██║     ██║ ╚═╝ ██║██║  ██║██║ ╚████║╚██████╗███████╗██║  ██║ ║
-║   ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝     ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ║
-║                                                                           v2.0.0 ║
-║                    Next-Gen WAF Evasion Research Framework                      ║
-║                         Response Oracle Technology                              ║
-╚══════════════════════════════════════════════════════════════════════════════════╝
-"""
+# ═══════════════════════════════════════════════════════════════
+# ░▒▓█  WAFMANCER — TERMINAL COLOR SYSTEM  █▓▒░
+# ═══════════════════════════════════════════════════════════════
 
+class C:
+    """Cyberpunk terminal color palette."""
+    RED      = "#ff2d55"
+    BLUE     = "#0a84ff"
+    PURPLE   = "#bf5af2"
+    GREEN    = "#30d158"
+    ORANGE   = "#ff9f0a"
+    TEAL     = "#64d2ff"
+    PINK     = "#ff375f"
+    GOLD     = "#ffd60a"
+    SILVER   = "#e5e5ea"
+    DIM      = "#636366"
+    DARK     = "#1c1c1e"
+    WHITE    = "#ffffff"
+    GRADIENT = "bold #bf5af2"
+
+# ═══════════════════════════════════════════════════════════════
+# ░▒▓█  SIGNATURE BANNER  █▓▒░
+# ═══════════════════════════════════════════════════════════════
+
+def display_banner():
+    """Display the signature WAFMANCER banner."""
+    console.print()
+    
+    # Top decorative line
+    console.print(Align.center(
+        Text("▂▃▅▇█▓▒░  W A F M A N C E R  ░▒▓█▇▅▃▂", 
+             style=f"bold {C.PURPLE}")
+    ))
+    
+    # Main title
+    title_lines = [
+        "   ╭──────────────────────────────────────────────────╮",
+        "   │                                                  │",
+        "   │   ░░      ░░  ░░░░░  ░░░░░░░  ░░   ░░  ░░░░░  ░░   ░░  ░░░░░░ ░░░░░░░ ░░░░░░  │",
+        "   │   ░░      ░░ ░░   ░░ ░░       ░░░ ░░░ ░░   ░░ ░░░  ░░ ░░      ░░      ░░   ░░ │",
+        "   │   ░░  ░░  ░░ ░░░░░░░ ░░░░░    ░░ ░░ ░ ░░░░░░░ ░░ ░░ ░ ░░      ░░░░░   ░░░░░░  │",
+        "   │   ░░ ░░░ ░░ ░░   ░░ ░░       ░░  ░  ░ ░░   ░░ ░░  ░ ░ ░░      ░░      ░░   ░░ │",
+        "   │    ░░░ ░░░  ░░   ░░ ░░       ░░     ░ ░░   ░░ ░░   ░░ ░░░░░░ ░░░░░░░ ░░   ░░ │",
+        "   │    ░   ░                                                               ░   ░  │",
+        "   │                                                  │",
+        "   │          ◆  Response Oracle Technology  ◆        │",
+        "   │          v2.0.0  ::  Zero-Day Engine             │",
+        "   │                                                  │",
+        "   ╰──────────────────────────────────────────────────╯",
+    ]
+    
+    for line in title_lines:
+        if "◆" in line:
+            console.print(Align.center(Text(line, style=f"bold {C.TEAL}")))
+        elif "v2.0.0" in line:
+            console.print(Align.center(Text(line, style=f"{C.DIM}")))
+        else:
+            console.print(Align.center(Text(line, style=f"{C.SILVER}")))
+
+    console.print()
+    
+    # GitHub-style badges row
+    badges = [
+        f"[{C.DARK} bg:{C.PURPLE}] ◈ ORACLE ENGINE [/]",
+        f"[{C.DARK} bg:{C.BLUE}] ◆ SMART MUTATIONS [/]",
+        f"[{C.DARK} bg:{C.GREEN}] ◈ WAF FINGERPRINT [/]",
+        f"[{C.DARK} bg:{C.ORANGE}] ◆ ZERO-DAY HUNT [/]",
+        f"[{C.DARK} bg:{C.RED}] ◈ CVE READY [/]",
+    ]
+    console.print(Align.center(Text("  ".join(badges))))
+    
+    console.print()
+    
+    # Stats bar
+    stats_bar = (
+        f"[{C.DIM}]╔{'═'*60}╗[/{C.DIM}]\n"
+        f"[{C.DIM}]║[/{C.DIM}]  "
+        f"[{C.SILVER}]Target:[/{C.SILVER}] [bold {C.WHITE}]RESPONSE ORACLE[/]  "
+        f"[{C.DIM}]│[/{C.DIM}]  "
+        f"[{C.SILVER}]Proto:[/{C.SILVER}] [bold {C.GREEN}]HTTP/2 + HTTP/3[/]  "
+        f"[{C.DIM}]│[/{C.DIM}]  "
+        f"[{C.SILVER}]Auth:[/{C.SILVER}] [bold {C.PINK}]kakashi4kx[/]  "
+        f"[{C.DIM}]║[/{C.DIM}]\n"
+        f"[{C.DIM}]╚{'═'*60}╝[/{C.DIM}]"
+    )
+    console.print(Align.center(Text.from_markup(stats_bar)))
+    
+    console.print()
+
+
+def display_scan_header(target: str, probes: int):
+    """Display scan initiation header."""
+    console.print()
+    console.print(Panel(
+        Text.from_markup(
+            f"[{C.TEAL}]► TARGET:[/]  [{C.WHITE}]{target}[/]\n"
+            f"[{C.TEAL}]► MODE:[/]    [{C.PURPLE}]Response Oracle Research Engine[/]\n"
+            f"[{C.TEAL}]► PROBES:[/]  [{C.GREEN}]{probes} mutations[/]\n"
+            f"[{C.TEAL}]► TIME:[/]    [{C.DIM}]{datetime.now().strftime('%H:%M:%S UTC')}[/]"
+        ),
+        border_style=C.PURPLE,
+        box=HEAVY,
+        padding=(1, 3),
+        title="[bold]◈ SCAN SEQUENCE INITIATED ◈[/]",
+        title_align="center",
+    ))
+    console.print()
+
+
+def display_waf_fingerprint(fingerprint):
+    """Display WAF fingerprint with signature styling."""
+    if not fingerprint:
+        return
+    
+    is_waf = fingerprint.vendor.value != "No WAF Detected"
+    
+    if is_waf:
+        accent = C.RED
+        icon = "◈"
+        label = "WAF DETECTED"
+    else:
+        accent = C.GREEN
+        icon = "◆"
+        label = "NO WAF"
+    
+    # Confidence bar
+    confidence_pct = int(fingerprint.confidence * 100)
+    bar_filled = "█" * (confidence_pct // 5)
+    bar_empty = "░" * (20 - confidence_pct // 5)
+    
+    panel_content = Text.from_markup(
+        f"[{C.SILVER}]▸ Vendor:[/]       [bold {C.WHITE}]{fingerprint.vendor.value}[/]\n"
+        f"[{C.SILVER}]▸ Confidence:[/]   [{accent}]{bar_filled}{bar_empty}[/] {confidence_pct}%\n"
+        f"[{C.SILVER}]▸ Indicators:[/]   [{C.ORANGE}]{len(fingerprint.evidence)} signatures matched[/]\n"
+        f"[{C.SILVER}]▸ Known Vectors:[/] [{C.TEAL}]{len(fingerprint.known_vulnerabilities)} bypass techniques available[/]"
+    )
+    
+    console.print(Panel(
+        panel_content,
+        border_style=accent,
+        box=ROUNDED,
+        padding=(1, 3),
+        title=f"[bold {accent}]{icon} {label} {icon}[/]",
+        title_align="center",
+    ))
+    console.print()
+
+
+def display_results_table(stats):
+    """Display results with signature table styling."""
+    console.print()
+    
+    total = stats["total_probes"]
+    anomalies = stats["anomalies_found"]
+    bypasses = stats["bypass_count"]
+    high_sev = stats["high_severity_count"]
+    rate = stats["anomaly_rate"]
+    
+    # Create results table
+    table = Table(
+        box=ROUNDED,
+        border_style=C.DIM,
+        show_header=True,
+        header_style=f"bold {C.GOLD}",
+        title=f"[bold {C.GOLD}]◆ SCAN RESULTS ◆[/]",
+        title_justify="center",
+        padding=(0, 2),
+    )
+    
+    table.add_column("Metric", style=C.SILVER, width=28)
+    table.add_column("Result", justify="center", width=22)
+    table.add_column("Indicator", justify="center", width=20)
+    
+    # Probes row
+    probe_status = "✓ COMPLETE" if total > 0 else "✗ FAILED"
+    probe_color = C.GREEN if total > 0 else C.RED
+    table.add_row(
+        "▸ Total Probes Fired",
+        f"[bold {C.WHITE}]{total}[/]",
+        f"[{probe_color}]{probe_status}[/]"
+    )
+    
+    # Anomalies row
+    if anomalies > 0:
+        anomaly_bar = "▰" * min(anomalies, 10) + "▱" * max(10 - anomalies, 0)
+        table.add_row(
+            "▸ Anomalies Detected",
+            f"[bold {C.RED}]{anomalies}[/]",
+            f"[{C.RED}]{anomaly_bar}[/]"
+        )
+    else:
+        table.add_row(
+            "▸ Anomalies Detected",
+            f"[{C.DIM}]{anomalies}[/]",
+            f"[{C.DIM}]—[/]"
+        )
+    
+    # Anomaly Rate
+    if rate > 0.5:
+        rate_color = C.RED
+        rate_label = "CRITICAL"
+    elif rate > 0.2:
+        rate_color = C.ORANGE
+        rate_label = "ELEVATED"
+    else:
+        rate_color = C.GREEN
+        rate_label = "NORMAL"
+    
+    table.add_row(
+        "▸ Anomaly Rate",
+        f"[bold {rate_color}]{rate:.1%}[/]",
+        f"[{rate_color}]{rate_label}[/]"
+    )
+    
+    # Bypass row
+    if bypasses > 0:
+        table.add_row(
+            "▸ Bypass Candidates",
+            f"[bold {C.RED}]◈ {bypasses} ◈[/]",
+            f"[bold {C.RED}]⚠ EXPLOITABLE[/]"
+        )
+    else:
+        table.add_row(
+            "▸ Bypass Candidates",
+            f"[{C.DIM}]{bypasses}[/]",
+            f"[{C.DIM}]—[/]"
+        )
+    
+    # High Severity
+    if high_sev > 0:
+        sev_bar = "◆" * min(high_sev, 5)
+        table.add_row(
+            "▸ High/Critical Findings",
+            f"[bold {C.RED}]{high_sev}[/]",
+            f"[{C.RED}]{sev_bar}[/]"
+        )
+    else:
+        table.add_row(
+            "▸ High/Critical Findings",
+            f"[{C.DIM}]{high_sev}[/]",
+            f"[{C.DIM}]—[/]"
+        )
+    
+    console.print(Align.center(table))
+    console.print()
+
+
+def display_anomaly_details(anomalies, waf_bypass_suggestions=None, known_vulns=None):
+    """Display anomaly findings with signature styling."""
+    if not anomalies:
+        return
+    
+    severity_config = {
+        "CRITICAL": (C.RED, "◈", "CRITICAL BYPASS"),
+        "HIGH": (C.ORANGE, "◆", "HIGH SEVERITY"),
+        "MEDIUM": (C.BLUE, "◇", "MEDIUM SEVERITY"),
+        "LOW": (C.DIM, "○", "LOW SEVERITY"),
+    }
+    
+    console.print()
+    console.print(Align.center(
+        Text(f"▂▃▅▇█▓▒░  FINDINGS  ░▒▓█▇▅▃▂", style=f"bold {C.GOLD}")
+    ))
+    console.print()
+    
+    for i, anomaly in enumerate(anomalies[:15], 1):
+        sev = anomaly.severity.name
+        color, icon, label = severity_config.get(sev, (C.DIM, "○", sev))
+        
+        # Build readable anomaly text
+        anomaly_lines = []
+        for a in anomaly.anomalies[:6]:
+            anomaly_lines.append(f"  {icon} {a}")
+        
+        if anomaly.is_exploitable:
+            anomaly_lines.append(f"")
+            anomaly_lines.append(f"  ◈ [bold {C.RED}]POTENTIALLY EXPLOITABLE[/]")
+        
+        if anomaly.research_notes:
+            for note in anomaly.research_notes:
+                anomaly_lines.append(f"  ▸ [{C.TEAL}]{note}[/]")
+        
+        console.print(Panel(
+            Text.from_markup("\n".join(anomaly_lines)),
+            border_style=color,
+            box=ROUNDED,
+            padding=(1, 2),
+            title=f"[bold {color}]{icon} FINDING #{i} : {label} {icon}[/]",
+            title_align="left",
+        ))
+    
+    if len(anomalies) > 15:
+        console.print(
+            Text(f"  ... and {len(anomalies) - 15} more anomalies", style=C.DIM)
+        )
+    
+    # Display bypass suggestions if available
+    if waf_bypass_suggestions:
+        console.print()
+        console.print(Panel(
+            Text.from_markup(
+                "\n".join(f"[{C.TEAL}]▸[/] [{C.SILVER}]{s}[/]" for s in waf_bypass_suggestions)
+            ),
+            border_style=C.TEAL,
+            box=ROUNDED,
+            padding=(1, 2),
+            title=f"[bold {C.TEAL}]◆ SUGGESTED BYPASS TECHNIQUES ◆[/]",
+            title_align="left",
+        ))
+    
+    if known_vulns:
+        console.print()
+        console.print(Panel(
+            Text.from_markup(
+                "\n".join(f"[{C.PURPLE}]▸[/] [{C.SILVER}]{v}[/]" for v in known_vulns)
+            ),
+            border_style=C.PURPLE,
+            box=ROUNDED,
+            padding=(1, 2),
+            title=f"[bold {C.PURPLE}]◇ KNOWN BYPASS VECTORS ◇[/]",
+            title_align="left",
+        ))
+
+
+def display_save_confirmation(session_id: int, report_path: str):
+    """Display save confirmation."""
+    console.print()
+    console.print(Align.center(
+        Text.from_markup(
+            f"[{C.GREEN}]✓[/] Session [{C.GOLD}]#{session_id}[/] archived  "
+            f"[{C.DIM}]│[/]  "
+            f"[{C.GREEN}]✓[/] Report: [{C.DIM}]{report_path}[/]"
+        )
+    ))
+
+
+def display_bounty_header(target_file: str, target_count: int, probes: int):
+    """Display bounty mode header."""
+    console.print()
+    console.print(Panel(
+        Text.from_markup(
+            f"[{C.TEAL}]► TARGET FILE:[/] [{C.WHITE}]{target_file}[/]\n"
+            f"[{C.TEAL}]► TARGETS:[/]     [{C.GREEN}]{target_count} URLs loaded[/]\n"
+            f"[{C.TEAL}]► PROBES/EACH:[/] [{C.ORANGE}]{probes} mutations[/]\n"
+            f"[{C.TEAL}]► MODE:[/]        [{C.PURPLE}]Automated Bounty Hunter[/]"
+        ),
+        border_style=C.PURPLE,
+        box=HEAVY,
+        padding=(1, 3),
+        title="[bold]◈ BOUNTY MODE ACTIVE ◈[/]",
+        title_align="center",
+    ))
+    console.print()
+
+
+def display_bounty_summary(results):
+    """Display bounty mode results summary."""
+    if not results:
+        console.print(Text(" No results.", style=C.DIM))
+        return
+    
+    total = len(results)
+    successful = sum(1 for r in results if r.get("error") is None)
+    total_bypasses = sum(r.get("bypass_count", 0) for r in results)
+    total_anomalies = sum(r.get("anomalies_found", 0) for r in results)
+    
+    console.print()
+    console.print(Panel(
+        Text.from_markup(
+            f"[{C.SILVER}]▸ Targets Scanned:[/]  [{C.WHITE}]{total}[/]\n"
+            f"[{C.SILVER}]▸ Successful:[/]      [{C.GREEN}]{successful}[/]\n"
+            f"[{C.SILVER}]▸ Total Anomalies:[/]  [{C.ORANGE}]{total_anomalies}[/]\n"
+            f"[{C.SILVER}]▸ Bypasses Found:[/]   [{C.RED}]{total_bypasses}[/]"
+        ),
+        border_style=C.GOLD,
+        box=ROUNDED,
+        padding=(1, 3),
+        title=f"[bold {C.GOLD}]◆ BOUNTY SCAN COMPLETE ◆[/]",
+        title_align="center",
+    ))
+    
+    # Show targets with bypasses
+    bypass_targets = [r for r in results if r.get("bypass_count", 0) > 0]
+    if bypass_targets:
+        console.print()
+        bypass_targets.sort(key=lambda x: x.get("bypass_count", 0), reverse=True)
+        for r in bypass_targets:
+            console.print(
+                Text.from_markup(
+                    f"  [{C.RED}]◈[/] [{C.WHITE}]{r['target']}[/] "
+                    f"[{C.DIM}]→[/] [{C.RED}]{r['bypass_count']} bypass(es)[/] "
+                    f"[{C.DIM}]| [{r.get('waf_vendor', 'Unknown')}][/]"
+                )
+            )
+
+
+def display_footer():
+    """Display signature footer."""
+    console.print()
+    console.print(Align.center(
+        Text(
+            "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
+            style=f"dim {C.PURPLE}"
+        )
+    ))
+    console.print(Align.center(
+        Text("✦ crafted by kakashi4kx / kakashi-kx ✦", style=f"italic {C.PINK}")
+    ))
+    console.print(Align.center(
+        Text("[ WAFMANCER v2.0.0 — Response Oracle Technology ]", style=C.DIM)
+    ))
+    console.print()
+
+
+# ═══════════════════════════════════════════════════════════════
+# ░▒▓█  CLI COMMANDS  █▓▒░
+# ═══════════════════════════════════════════════════════════════
 
 @click.group()
-@click.version_option(version="2.0.0-dev")
+@click.version_option(version="2.0.0", prog_name="WAFMANCER")
 def main():
-    """WAFMANCER — Advanced WAF Evasion Research Framework."""
+    """
+    \b
+    WAFMANCER — Next-Gen WAF Evasion Research Framework
+    Response Oracle Technology | Smart Mutations | Zero-Day Engine
+    crafted by kakashi4kx / kakashi-kx
+    """
     pass
 
 
@@ -49,197 +462,132 @@ def main():
 @click.option("--probes", default=None, type=int, help="Maximum number of probes")
 @click.option("--concurrency", default=None, type=int, help="Maximum concurrent probes")
 @click.option("--output", "-o", default=None, help="Output file for research report")
-@click.option("--no-save", is_flag=True, help="Don't save results to research database")
+@click.option("--no-save", is_flag=True, help="Skip database save")
 def oracle(target, probes, concurrency, output, no_save):
     """
     Run the Response Oracle against a target.
-
-    Maps WAF decision boundaries through systematic probing.
-    Produces a comprehensive research report of all findings.
-    Automatically saves results to the research database.
+    
+    Maps WAF decision boundaries through systematic probing
+    with fingerprinting and targeted mutation generation.
     """
-    console.print(BANNER)
-    console.print(f"[bold cyan]🎯 Target:[/bold cyan] {target}")
-    console.print(f"[bold cyan]🔬 Mode:[/bold cyan] Response Oracle Research Engine\n")
-
-    # Normalize target
+    display_banner()
+    
     target_url = normalize_target_url(target)
-
-    # Override config with CLI options
+    
     if probes:
         config._config["oracle"]["max_probes"] = probes
     if concurrency:
         config._config["oracle"]["concurrency"] = concurrency
-
-    # Run oracle
+    
+    actual_probes = probes or config.get("oracle", "max_probes", default=20)
+    display_scan_header(target_url, actual_probes)
+    
     oracle_engine = ResponseOracle(target_url)
-
-    async def run_oracle():
-        session = await oracle_engine.run()
-        return session
-
+    
+    async def run():
+        return await oracle_engine.run()
+    
     try:
-        with console.status("[bold green]Oracle analyzing target...[/bold green]", spinner="dots"):
-            session = asyncio.run(run_oracle())
-
-        # Display results
-        stats = session.statistics
-
-        # --- WAF Fingerprint Panel ---
+        with console.status(
+            f"[{C.PURPLE}]◈ Oracle analyzing target...[/]", 
+            spinner="dots"
+        ):
+            session = asyncio.run(run())
+        
+        # Display fingerprint
         if session.waf_fingerprint:
-            waf_color = "green" if session.waf_fingerprint.vendor.value != "No WAF Detected" else "yellow"
-            fingerprint_text = (
-                f"Vendor: {session.waf_fingerprint.vendor.value}\n"
-                f"Confidence: {session.waf_fingerprint.confidence:.1%}\n"
-                f"Evidence: {len(session.waf_fingerprint.evidence)} indicators"
-            )
-            console.print(Panel(
-                fingerprint_text,
-                title=f"[bold {waf_color}]🔍 WAF Fingerprint[/bold {waf_color}]",
-                border_style=waf_color,
-            ))
-
-        # --- Statistics Table ---
-        results_table = Table(title="Oracle Research Results")
-        results_table.add_column("Metric", style="cyan")
-        results_table.add_column("Value", style="green")
-
-        results_table.add_row("Total Probes", str(stats["total_probes"]))
-        results_table.add_row("Anomalies Detected", str(stats["anomalies_found"]))
-        results_table.add_row("Anomaly Rate", f"{stats['anomaly_rate']:.1%}")
-        results_table.add_row("Bypass Candidates", str(stats["bypass_count"]))
-        results_table.add_row("High/Critical Findings", str(stats["high_severity_count"]))
-
-        console.print(results_table)
-
-        # --- Anomaly Details ---
-        if session.anomalies:
-            console.print("\n[bold yellow]⚠️  Anomalies Found:[/bold yellow]")
-            for i, anomaly in enumerate(session.anomalies[:15], 1):  # Show up to 15
-                severity_color = {
-                    "CRITICAL": "red",
-                    "HIGH": "yellow",
-                    "MEDIUM": "blue",
-                    "LOW": "green",
-                    "NONE": "white",
-                }.get(anomaly.severity.name, "white")
-
-                anomaly_text = "\n".join(f"• {a}" for a in anomaly.anomalies)
-                if anomaly.research_notes:
-                    anomaly_text += "\n\n" + "\n".join(f"📝 {n}" for n in anomaly.research_notes)
-
-                if anomaly.is_exploitable:
-                    anomaly_text = f"🔥 [bold]POTENTIALLY EXPLOITABLE[/bold] 🔥\n\n{anomaly_text}"
-
-                console.print(Panel(
-                    anomaly_text,
-                    title=f"[{severity_color}]Finding #{i}: {anomaly.severity.name}[/{severity_color}]",
-                    border_style=severity_color,
-                ))
-
-            if len(session.anomalies) > 15:
-                console.print(f"\n[yellow]... and {len(session.anomalies) - 15} more anomalies. Use --output for full report.[/yellow]")
-
-        # --- WAF-Specific Bypass Suggestions ---
-        if session.waf_fingerprint and session.waf_fingerprint.suggested_mutations:
-            console.print("\n[bold cyan]💡 Suggested Bypass Techniques for this WAF:[/bold cyan]")
-            for mutation in session.waf_fingerprint.suggested_mutations:
-                console.print(f"  🧬 {mutation}")
-
-        # --- Known Vulnerabilities ---
-        if session.waf_fingerprint and session.waf_fingerprint.known_vulnerabilities:
-            console.print("\n[bold cyan]📚 Known Bypass Vectors:[/bold cyan]")
-            for vuln in session.waf_fingerprint.known_vulnerabilities:
-                console.print(f"  ⚡ {vuln}")
-
-        # --- Generate Report ---
+            display_waf_fingerprint(session.waf_fingerprint)
+        
+        # Display results
+        display_results_table(session.statistics)
+        
+        # Display anomalies
+        display_anomaly_details(
+            session.anomalies,
+            waf_bypass_suggestions=(
+                session.waf_fingerprint.suggested_mutations 
+                if session.waf_fingerprint else None
+            ),
+            known_vulns=(
+                session.waf_fingerprint.known_vulnerabilities 
+                if session.waf_fingerprint else None
+            ),
+        )
+        
+        # Generate and save report
         report = oracle_engine.generate_report()
-        if output:
-            output_path = Path(output)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(report)
-            console.print(f"\n📄 Report saved to: [bold]{output}[/bold]")
-        else:
-            # Save report to default location
-            report_dir = Path(config.get("output", "research_dir", default="research"))
-            report_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = session.start_time.replace(":", "-").replace("T", "_")[:19]
-            report_path = report_dir / f"report_{session.target.replace('://', '_').replace('/', '_')}_{timestamp}.md"
-            report_path.write_text(report)
-            console.print(f"\n📄 Report saved to: [bold]{report_path}[/bold]")
-
-        # --- Save to Research Database ---
+        report_dir = Path(config.get("output", "research_dir", default="research"))
+        report_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = report_dir / f"report_{timestamp}.md"
+        report_path.write_text(report)
+        
+        # Save to database
+        session_id = None
         if not no_save:
             try:
                 store = ResearchStore()
                 session_id = store.save_session(session)
-                console.print(f"💾 [bold green]Session saved to research database (ID: {session_id})[/bold green]")
                 store.close()
-            except Exception as e:
-                console.print(f"[yellow]⚠️  Could not save to database: {e}[/yellow]")
-
+            except Exception:
+                pass
+        
+        display_save_confirmation(session_id or 0, str(report_path))
+        
     except Exception as e:
-        console.print(f"\n[bold red]❌ Error:[/bold red] {e}")
+        console.print(f"\n[{C.RED}]◈ Error:[/] {e}")
         sys.exit(1)
+    
+    display_footer()
 
 
 @main.command()
 def info():
     """Display framework information and configuration."""
-    console.print(BANNER)
-    console.print("[bold cyan]Current Configuration:[/bold cyan]")
+    display_banner()
     conf = config.to_dict()
     console.print_json(data=conf)
+    display_footer()
 
 
 @main.command()
 def modules():
     """List available research modules."""
-    console.print(BANNER)
-    console.print("[bold cyan]Available Research Modules:[/bold cyan]\n")
-
-    modules_table = Table(title="WAFMANCER Modules")
-    modules_table.add_column("Module", style="cyan")
-    modules_table.add_column("Status", style="yellow")
-    modules_table.add_column("Description", style="white")
-
-    modules_table.add_row(
-        "Response Oracle",
-        "✅ Active",
-        "WAF decision boundary mapping engine with WAF fingerprinting"
+    display_banner()
+    
+    modules_data = [
+        ("Response Oracle", C.PURPLE, "◈ ACTIVE", "WAF decision boundary mapping engine"),
+        ("Smart Mutations", C.BLUE, "◆ ACTIVE", "WAF-specific targeted mutation generation (50+ payloads)"),
+        ("WAF Fingerprinter", C.GREEN, "◈ ACTIVE", "Passive WAF detection via multi-vector analysis"),
+        ("Research Database", C.ORANGE, "◆ ACTIVE", "Persistent findings storage with export capabilities"),
+        ("Bug Bounty Mode", C.TEAL, "◈ ACTIVE", "Automated multi-target scanning"),
+        ("Neuro-Camouflage", C.PINK, "◇ PLANNED", "AI-powered adversarial payload mutation"),
+        ("QUIC-Strike", C.RED, "◇ PLANNED", "HTTP/3 0-RTT smuggling exploitation"),
+    ]
+    
+    table = Table(
+        box=ROUNDED,
+        border_style=C.DIM,
+        show_header=True,
+        header_style=f"bold {C.GOLD}",
+        title=f"[bold {C.GOLD}]◆ ACTIVE MODULES ◆[/]",
+        title_justify="center",
+        padding=(0, 2),
     )
-    modules_table.add_row(
-        "Smart Mutation Engine",
-        "✅ Active",
-        "WAF-specific targeted mutation generation"
-    )
-    modules_table.add_row(
-        "Research Store",
-        "✅ Active",
-        "Persistent findings database with export capabilities"
-    )
-    modules_table.add_row(
-        "Advanced Fuzzer",
-        "✅ Active",
-        "Differential fuzzing with anomaly detection"
-    )
-    modules_table.add_row(
-        "WAF Fingerprinter",
-        "✅ Active",
-        "Passive WAF detection through multi-vector analysis"
-    )
-    modules_table.add_row(
-        "Neuro-Camouflage",
-        "🔜 Phase 4",
-        "AI-powered payload mutation and evasion"
-    )
-    modules_table.add_row(
-        "QUIC-Strike",
-        "🔜 Phase 4",
-        "HTTP/3 0-RTT smuggling exploitation"
-    )
-
-    console.print(modules_table)
+    
+    table.add_column("Module", style=C.SILVER, width=22)
+    table.add_column("Status", justify="center", width=16)
+    table.add_column("Description", style=C.DIM, width=45)
+    
+    for name, color, status, desc in modules_data:
+        table.add_row(
+            f"[{color}]▸[/] {name}",
+            f"[{color}]{status}[/]",
+            desc,
+        )
+    
+    console.print(Align.center(table))
+    display_footer()
 
 
 @main.command()
@@ -247,299 +595,212 @@ def modules():
 @click.option("--limit", default=50, type=int, help="Maximum sessions to display")
 def history(target, limit):
     """View research session history."""
-    console.print(BANNER)
-    console.print("[bold cyan]📋 Research Session History[/bold cyan]\n")
-
+    display_banner()
+    
     store = ResearchStore()
     sessions = store.get_session_history(target)
-
-    if not sessions:
-        console.print("[yellow]No research sessions found. Run 'wafmancer oracle' first![/yellow]")
-        store.close()
-        return
-
-    # Limit results
     sessions = sessions[:limit]
-
-    # Create results table
-    title = f"Research Session History{' for ' + target if target else ''} (Showing {len(sessions)} of {len(store.get_session_history(target))} total)"
-    table = Table(title=title)
-    table.add_column("ID", style="cyan", width=6)
-    table.add_column("Target", style="white", width=45)
-    table.add_column("Date", style="blue", width=20)
-    table.add_column("WAF", style="yellow", width=22)
-    table.add_column("Probes", style="green", width=8)
-    table.add_column("Anomalies", style="red", width=10)
-    table.add_column("Bypasses", style="bold red", width=10)
-
-    for session in sessions:
-        # Truncate long targets
-        target_display = session["target"]
-        if len(target_display) > 42:
-            target_display = target_display[:39] + "..."
-
-        # Format date
-        date_display = "N/A"
-        if session.get("start_time"):
-            date_display = session["start_time"][:19].replace("T", " ")
-
-        # Color code WAF column
-        waf = session.get("waf_vendor") or "Unknown"
-        if waf == "No WAF Detected":
-            waf_color = "green"
-        elif waf == "Unknown":
-            waf_color = "white"
-        else:
-            waf_color = "yellow"
-
+    
+    if not sessions:
+        console.print(Text("  No sessions found. Run 'wafmancer oracle' first.", style=C.DIM))
+        store.close()
+        display_footer()
+        return
+    
+    table = Table(
+        box=ROUNDED,
+        border_style=C.DIM,
+        show_header=True,
+        header_style=f"bold {C.GOLD}",
+        title=f"[bold {C.GOLD}]◆ SESSION HISTORY ◆[/]",
+        title_justify="center",
+        padding=(0, 1),
+    )
+    
+    table.add_column("ID", style=C.DIM, width=5)
+    table.add_column("Target", style=C.SILVER, width=40)
+    table.add_column("Date", style=C.DIM, width=18)
+    table.add_column("WAF", style=C.TEAL, width=18)
+    table.add_column("Probes", style=C.GREEN, width=7)
+    table.add_column("Anomalies", style=C.ORANGE, width=9)
+    table.add_column("Bypasses", style=C.RED, width=8)
+    
+    for s in sessions:
+        target_display = s["target"][:38] + ".." if len(s["target"]) > 40 else s["target"]
+        date_display = (s.get("start_time") or "N/A")[:16].replace("T", " ")
+        waf = s.get("waf_vendor") or "—"
+        bypasses = s.get("bypass_count", 0)
+        
         table.add_row(
-            str(session["id"]),
+            str(s["id"]),
             target_display,
             date_display,
-            f"[{waf_color}]{waf[:20]}[/{waf_color}]",
-            str(session.get("total_probes", 0)),
-            str(session.get("anomalies_found", 0)),
-            str(session.get("bypass_count", 0)),
+            waf,
+            str(s.get("total_probes", 0)),
+            str(s.get("anomalies_found", 0)),
+            f"[bold {C.RED}]{bypasses}[/]" if bypasses > 0 else str(bypasses),
         )
-
-    console.print(table)
-
-    # Quick stats
-    total_anomalies = sum(s.get("anomalies_found", 0) for s in sessions)
+    
+    console.print(Align.center(table))
+    
     total_bypasses = sum(s.get("bypass_count", 0) for s in sessions)
-    console.print(f"\n[bold]Summary:[/bold] {total_anomalies} anomalies, {total_bypasses} bypass candidates across {len(sessions)} sessions")
-
-    store.close()
-
-
-@main.command()
-@click.option("--format", "fmt", type=click.Choice(["markdown", "json"]), default="markdown",
-              help="Export format")
-@click.option("-o", "--output", default=None, help="Output file path")
-@click.option("--severity", default=None, 
-              type=click.Choice(["CRITICAL", "HIGH", "MEDIUM", "LOW"]),
-              help="Filter by severity")
-@click.option("--vendor", default=None, help="Filter by WAF vendor")
-@click.option("--exploitable-only", is_flag=True, help="Only export exploitable findings")
-@click.option("--cve-candidates", is_flag=True, help="Only export CVE candidates")
-def export(fmt, output, severity, vendor, exploitable_only, cve_candidates):
-    """Export research findings for publication."""
-    console.print(BANNER)
-    console.print("[bold cyan]📊 Exporting Research Findings[/bold cyan]\n")
-
-    store = ResearchStore()
-
-    # Show quick stats first
-    stats = store.get_statistics()
-    stats_table = Table(title="Research Database Statistics")
-    stats_table.add_column("Metric", style="cyan")
-    stats_table.add_column("Value", style="green")
-
-    stats_table.add_row("Total Sessions", str(stats["total_sessions"]))
-    stats_table.add_row("Total Probes", str(stats["total_probes"]))
-    stats_table.add_row("Exploitable Findings", str(stats["exploitable_findings"]))
-    stats_table.add_row("CVE Candidates", str(stats["cve_candidates"]))
-
-    total_findings = sum(stats.get("findings_by_severity", {}).values())
-    stats_table.add_row("Total Findings", str(total_findings))
-
-    console.print(stats_table)
-
-    # Show severity breakdown
-    if stats.get("findings_by_severity"):
-        console.print("\n[bold]Findings by Severity:[/bold]")
-        for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-            count = stats["findings_by_severity"].get(sev, 0)
-            if count > 0:
-                color = {"CRITICAL": "red", "HIGH": "yellow", "MEDIUM": "blue", "LOW": "green"}[sev]
-                bar = "█" * min(count, 50)
-                console.print(f"  [{color}]{sev:10s}[/{color}] {count:4d} {bar}")
-
-    if fmt == "markdown":
-        output_path = Path(output) if output else Path(
-            config.get("output", "research_dir", default="research")
-        ) / "findings_export.md"
-
-        store.export_findings_markdown(output_path)
-        console.print(f"\n✅ [bold green]Findings exported to: {output_path}[/bold green]")
-        console.print(f"   [dim]Open in any Markdown viewer for publication-ready formatting[/dim]")
-
-    elif fmt == "json":
-        import json
-        findings = store.query_findings(
-            severity=severity,
-            vendor=vendor,
-            exploitable_only=exploitable_only,
-            cve_candidates_only=cve_candidates,
+    total_anomalies = sum(s.get("anomalies_found", 0) for s in sessions)
+    console.print(
+        Text.from_markup(
+            f"  [{C.DIM}]Total:[/] [{C.ORANGE}]{total_anomalies} anomalies[/]  "
+            f"[{C.DIM}]│[/]  [{C.RED}]{total_bypasses} bypasses[/]  "
+            f"[{C.DIM}]│[/]  [{C.DIM}]{len(sessions)} sessions[/]"
         )
-
-        output_path = Path(output) if output else Path(
-            config.get("output", "research_dir", default="research")
-        ) / "findings_export.json"
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(findings, indent=2, default=str))
-
-        console.print(f"\n✅ [bold green]Findings exported to: {output_path}[/bold green]")
-
+    )
+    
     store.close()
+    display_footer()
 
 
 @main.command()
 def stats():
     """Display research database statistics."""
-    console.print(BANNER)
-    console.print("[bold cyan]📈 Research Database Statistics[/bold cyan]\n")
-
+    display_banner()
+    
     store = ResearchStore()
-    stats_data = store.get_statistics()
-
-    # --- Overview Panel ---
-    overview_text = (
-        f"[bold]Total Research Sessions:[/bold]     {stats_data['total_sessions']}\n"
-        f"[bold]Total Probes Fired:[/bold]        {stats_data['total_probes']}\n"
-        f"[bold]Exploitable Findings:[/bold]      {stats_data['exploitable_findings']}\n"
-        f"[bold]CVE Candidates:[/bold]            {stats_data['cve_candidates']}\n"
-        f"[bold]Unique WAFs Encountered:[/bold]   {len(stats_data.get('top_wafs', {}))}"
-    )
+    data = store.get_statistics()
+    
+    # Overview
     console.print(Panel(
-        overview_text,
-        title="Research Overview",
-        border_style="cyan",
+        Text.from_markup(
+            f"[{C.SILVER}]▸ Sessions:[/]       [{C.WHITE}]{data['total_sessions']}[/]\n"
+            f"[{C.SILVER}]▸ Total Probes:[/]    [{C.WHITE}]{data['total_probes']}[/]\n"
+            f"[{C.SILVER}]▸ Exploitable:[/]     [{C.RED}]{data['exploitable_findings']}[/]\n"
+            f"[{C.SILVER}]▸ CVE Candidates:[/]  [{C.GOLD}]{data['cve_candidates']}[/]"
+        ),
+        border_style=C.PURPLE,
+        box=ROUNDED,
+        padding=(1, 3),
+        title=f"[bold {C.PURPLE}]◆ RESEARCH OVERVIEW ◆[/]",
+        title_align="center",
     ))
-
-    # --- Top WAFs ---
-    if stats_data.get("top_wafs"):
-        console.print("\n[bold]🎯 Top WAFs Encountered:[/bold]")
-        waf_table = Table()
-        waf_table.add_column("WAF Vendor", style="yellow")
-        waf_table.add_column("Sessions", style="green")
-        waf_table.add_column("Frequency", style="blue")
-
-        max_sessions = max(stats_data["top_wafs"].values()) if stats_data["top_wafs"] else 1
-        for waf, count in stats_data["top_wafs"].items():
-            bar_len = int(30 * count / max_sessions)
-            bar = "█" * bar_len + "░" * (30 - bar_len)
-            waf_table.add_row(waf, str(count), f"[blue]{bar}[/blue]")
-
-        console.print(waf_table)
-
-    # --- Findings Distribution ---
-    if stats_data.get("findings_by_severity"):
-        console.print("\n[bold]📊 Findings by Severity:[/bold]")
-        sev_table = Table()
-        sev_table.add_column("Severity", style="cyan")
-        sev_table.add_column("Count", style="green")
-        sev_table.add_column("Distribution", style="blue")
-
-        total = sum(stats_data["findings_by_severity"].values())
-        for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-            count = stats_data["findings_by_severity"].get(severity, 0)
+    
+    # Top WAFs
+    if data.get("top_wafs"):
+        console.print()
+        waf_list = "\n".join(
+            f"[{C.TEAL}]▸[/] [{C.SILVER}]{waf}[/] [{C.DIM]}— {count} sessions[/]"
+            for waf, count in data["top_wafs"].items()
+        )
+        console.print(Panel(
+            Text.from_markup(waf_list),
+            border_style=C.BLUE,
+            box=ROUNDED,
+            padding=(1, 2),
+            title=f"[bold {C.BLUE}]◇ WAFS ENCOUNTERED ◇[/]",
+            title_align="left",
+        ))
+    
+    # Severity distribution
+    if data.get("findings_by_severity"):
+        console.print()
+        sev_lines = []
+        for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
+            count = data["findings_by_severity"].get(sev, 0)
             if count > 0:
-                color = {"CRITICAL": "red", "HIGH": "yellow", "MEDIUM": "blue", "LOW": "green"}[severity]
-                pct = count / total * 100 if total > 0 else 0
-                bar_len = int(30 * count / total) if total > 0 else 0
-                bar = "█" * bar_len + "░" * (30 - bar_len)
-                sev_table.add_row(
-                    f"[{color}]{severity}[/{color}]",
-                    str(count),
-                    f"[blue]{bar}[/blue] {pct:.1f}%"
-                )
-
-        console.print(sev_table)
-
-    # --- Top Targets ---
-    sessions = store.get_session_history()
-    if sessions:
-        from collections import Counter
-        target_counter = Counter(s["target"] for s in sessions)
-        console.print("\n[bold]🎯 Top Targets:[/bold]")
-        target_table = Table()
-        target_table.add_column("Target", style="cyan")
-        target_table.add_column("Sessions", style="green")
-        for target_url, count in target_counter.most_common(5):
-            display_target = target_url[:60] + "..." if len(target_url) > 60 else target_url
-            target_table.add_row(display_target, str(count))
-        console.print(target_table)
-
+                color = {"CRITICAL": C.RED, "HIGH": C.ORANGE, "MEDIUM": C.BLUE, "LOW": C.DIM}[sev]
+                bar = "▰" * min(count, 30) + "▱" * max(30 - count, 0)
+                sev_lines.append(f"[{color}]▸ {sev:9}[/] [{C.WHITE}]{count:3}[/] [{color}]{bar}[/]")
+        
+        console.print(Panel(
+            Text.from_markup("\n".join(sev_lines)),
+            border_style=C.ORANGE,
+            box=ROUNDED,
+            padding=(1, 2),
+            title=f"[bold {C.ORANGE}]◇ SEVERITY DISTRIBUTION ◇[/]",
+            title_align="left",
+        ))
+    
     store.close()
+    display_footer()
 
 
 @main.command()
-@click.argument("session_id", type=int)
-def view(session_id):
-    """View details of a specific research session."""
-    console.print(BANNER)
-    console.print(f"[bold cyan]🔍 Viewing Session #{session_id}[/bold cyan]\n")
-
+@click.option("--format", "fmt", type=click.Choice(["markdown", "json"]), default="markdown")
+@click.option("-o", "--output", default=None)
+@click.option("--severity", default=None)
+@click.option("--vendor", default=None)
+@click.option("--exploitable-only", is_flag=True)
+@click.option("--cve-candidates", is_flag=True)
+def export(fmt, output, severity, vendor, exploitable_only, cve_candidates):
+    """Export research findings for publication."""
+    display_banner()
+    
     store = ResearchStore()
+    data = store.get_statistics()
     
-    # Query session details
-    conn = store._get_connection()
+    console.print(Text.from_markup(
+        f"[{C.DIM}]Exporting {sum(data.get('findings_by_severity', {}).values())} findings...[/]"
+    ))
     
-    # Get session info
-    cursor = conn.execute(
-        "SELECT * FROM sessions WHERE id = ?",
-        (session_id,)
-    )
-    session = cursor.fetchone()
-    
-    if not session:
-        console.print(f"[red]Session #{session_id} not found.[/red]")
-        store.close()
-        return
-    
-    session = dict(session)
-    
-    # Display session details
-    console.print(f"[bold]Target:[/bold] {session['target']}")
-    console.print(f"[bold]Date:[/bold] {session.get('start_time', 'N/A')}")
-    console.print(f"[bold]WAF Detected:[/bold] {session.get('waf_vendor', 'Unknown')}")
-    console.print(f"[bold]Confidence:[/bold] {session.get('waf_confidence', 'N/A')}")
-    console.print(f"[bold]Total Probes:[/bold] {session.get('total_probes', 0)}")
-    console.print(f"[bold]Anomalies Found:[/bold] {session.get('anomalies_found', 0)}")
-    console.print(f"[bold]Bypass Candidates:[/bold] {session.get('bypass_count', 0)}")
-    console.print(f"[bold]High/Critical:[/bold] {session.get('high_severity_count', 0)}")
-    
-    # Get associated findings
-    cursor = conn.execute(
-        """SELECT * FROM findings 
-           WHERE session_id = ? 
-           ORDER BY 
-             CASE severity 
-               WHEN 'CRITICAL' THEN 1 
-               WHEN 'HIGH' THEN 2 
-               WHEN 'MEDIUM' THEN 3 
-               WHEN 'LOW' THEN 4 
-             END""",
-        (session_id,)
-    )
-    findings = [dict(row) for row in cursor.fetchall()]
-    
-    if findings:
-        console.print(f"\n[bold]Findings ({len(findings)}):[/bold]")
-        for finding in findings:
-            severity_color = {
-                "CRITICAL": "red",
-                "HIGH": "yellow",
-                "MEDIUM": "blue",
-                "LOW": "green",
-            }.get(finding["severity"], "white")
-            
-            finding_text = (
-                f"Type: {finding['finding_type']}\n"
-                f"Description: {finding['description'][:200]}\n"
-                f"Exploitable: {'Yes ⚠️' if finding['is_exploitable'] else 'No'}\n"
-                f"CVE Candidate: {'Yes 🔥' if finding['cve_candidate'] else 'No'}"
-            )
-            
-            console.print(Panel(
-                finding_text,
-                title=f"[{severity_color}]{finding['severity']}[/{severity_color}]",
-                border_style=severity_color,
-            ))
+    if fmt == "markdown":
+        output_path = Path(output) if output else Path("research") / "findings_export.md"
+        store.export_findings_markdown(output_path)
+        console.print(f"[{C.GREEN}]◈ Exported to:[/] [{C.SILVER}]{output_path}[/]")
     
     store.close()
+    display_footer()
+
+
+@main.command()
+@click.option("-f", "--file", "target_file", required=True, help="Target list file")
+@click.option("--probes", default=20, type=int)
+@click.option("--concurrency", default=5, type=int)
+@click.option("--delay", default=2.0, type=float)
+@click.option("-o", "--output", default=None)
+def bounty(target_file, probes, concurrency, delay, output):
+    """Bug Bounty Mode — scan multiple targets automatically."""
+    from wafmancer.core.bounty_mode import BountyScanner, load_targets_from_file
+    
+    display_banner()
+    
+    try:
+        targets = load_targets_from_file(target_file)
+    except FileNotFoundError as e:
+        console.print(f"[{C.RED}]◈ Error:[/] {e}")
+        return
+    
+    if not targets:
+        console.print(f"[{C.ORANGE}]◈ No targets found.[/]")
+        return
+    
+    display_bounty_header(target_file, len(targets), probes)
+    
+    if not click.confirm(f"\n  [{C.ORANGE}]Proceed with scan?[/]"):
+        console.print(f"[{C.DIM}]  Cancelled.[/]")
+        display_footer()
+        return
+    
+    scanner = BountyScanner(
+        targets=targets,
+        probes_per_target=probes,
+        concurrency=concurrency,
+        delay_between_targets=delay,
+    )
+    
+    async def run_bounty():
+        return await scanner.scan_all()
+    
+    try:
+        results = asyncio.run(run_bounty())
+        display_bounty_summary(results)
+        
+        saved_path = scanner.save_results(Path(output) if output else None)
+        console.print(f"\n[{C.GREEN}]◈ Results:[/] [{C.DIM}]{saved_path}[/]")
+        
+    except KeyboardInterrupt:
+        console.print(f"\n[{C.ORANGE}]◈ Interrupted.[/]")
+    except Exception as e:
+        console.print(f"\n[{C.RED}]◈ Error:[/] {e}")
+    finally:
+        scanner.close()
+    
+    display_footer()
 
 
 if __name__ == "__main__":
