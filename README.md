@@ -27,21 +27,22 @@
 
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.0-purple?style=for-the-badge" alt="Version">
-  <img src="https://img.shields.io/badge/python-3.10+-blue?style=for-the-badge&logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/status-active-success?style=for-the-badge" alt="Status">
+  <a href="https://github.com/kakashi-kx/wafmancer"><img src="https://img.shields.io/badge/version-2.0.0-purple?style=for-the-badge"></a>
+  <a href="#"><img src="https://img.shields.io/badge/python-3.10+-blue?style=for-the-badge&logo=python"></a>
+  <a href="#"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge"></a>
+  <a href="#"><img src="https://img.shields.io/badge/status-active-success?style=for-the-badge"></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/WAF-Cloudflare-red?style=flat-square" alt="Cloudflare">
-  <img src="https://img.shields.io/badge/WAF-AWS_WAF-orange?style=flat-square" alt="AWS WAF">
-  <img src="https://img.shields.io/badge/WAF-Akamai-blue?style=flat-square" alt="Akamai">
-  <img src="https://img.shields.io/badge/WAF-Sucuri-green?style=flat-square" alt="Sucuri">
-  <img src="https://img.shields.io/badge/WAF-ModSecurity-gray?style=flat-square" alt="ModSecurity">
+  <img src="https://img.shields.io/badge/WAF-Cloudflare-red?style=flat-square">
+  <img src="https://img.shields.io/badge/WAF-AWS_WAF-orange?style=flat-square">
+  <img src="https://img.shields.io/badge/WAF-Akamai-blue?style=flat-square">
+  <img src="https://img.shields.io/badge/WAF-Sucuri-green?style=flat-square">
+  <img src="https://img.shields.io/badge/WAF-ModSecurity-gray?style=flat-square">
 </p>
 
-<h1 align="center">WAFMANCER v2.0</h1>
+# <p align="center">WAFMANCER v2.0</p>
+
 <h4 align="center">Next-Generation WAF Evasion Research Framework</h4>
 
 <p align="center">
