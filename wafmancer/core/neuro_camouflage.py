@@ -822,51 +822,52 @@ class NeuroCamouflage:
 
         return results
 
-    def generate_report(self, results: Dict[str, Any]) -> str:
+        def generate_report(self, results: Dict[str, Any]) -> str:
         """Generate a markdown report of camouflage results."""
-        report = f"""# 🧠 Neuro-Camouflage — Adversarial AI Evasion Report
+        report = "# 🧠 Neuro-Camouflage — Adversarial AI Evasion Report\n\n"
+        report += "## Original Payload Analysis\n"
+        report += f"- **Type:** {results['category']}\n"
+        report += f"- **Detection Score:** {results['original_detection_score']:.3f}\n"
+        report += f"- **Bypass Probability:** {results['original_bypass_probability']:.1%}\n\n"
+        
+        report += "## Camouflage Results\n"
+        report += f"- **Strategies Applied:** {', '.join(results['strategies_applied'])}\n"
+        report += f"- **Best Score After Camouflage:** {results['best_score']:.3f}\n"
+        report += f"- **Improvement:** {results['improvement_percent']:.1f}%\n\n"
+        
+        report += "## Original Payload\n```\n"
+        report += f"{results['original_payload']}\n```\n\n"
+        
+        report += "## Best Camouflaged Payload\n```\n"
+        report += f"{results.get('best_payload', 'N/A')}\n```\n"
 
-## Original Payload Analysis
-- **Type:** {results['category']}
-- **Detection Score:** {results['original_detection_score']:.3f}
-- **Bypass Probability:** {results['original_bypass_probability']:.1%}
-
-## Camouflage Results
-- **Strategies Applied:** {', '.join(results['strategies_applied'])}
-- **Best Score After Camouflage:** {results['best_score']:.3f}
-- **Improvement:** {results['improvement_percent']:.1f}%
-
-## Original Payload
-{results['original_payload']}
-
-## Best Camouflaged Payload
-{results.get('best_payload', 'N/A')}
-
-"""
         if results["evolution_result"]:
-            report += f"""## Evolution Statistics
-- **Generations:** {results['evolution_result']['generations']}
-- **Total Mutations:** {results['evolution_result']['total_mutations']}
-- **Time Elapsed:** {results['evolution_result']['time_elapsed']:.2f}s
+            evo = results["evolution_result"]
+            report += "\n## Evolution Statistics\n"
+            report += f"- **Generations:** {evo['generations']}\n"
+            report += f"- **Total Mutations:** {evo['total_mutations']}\n"
+            report += f"- **Time Elapsed:** {evo['time_elapsed']:.2f}s\n\n"
+            
+            report += "### Fitness Curve\n```\n"
+            curve = evo["fitness_curve"]
+            if curve:
+                max_fitness = max(curve)
+                if max_fitness <= 0:
+                    max_fitness = 0.01
+                for i, fitness in enumerate(curve):
+                    bar_length = int(30 * fitness / max_fitness)
+                    bar = "█" * bar_length
+                    report += f"Gen {i:3d}: {bar} {fitness:.3f}\n"
+            report += "```\n"
 
-### Fitness Curve
-"""
-curve = results["evolution_result"]["fitness_curve"]
-if curve:
-max_fitness = max(curve)
-for i, fitness in enumerate(curve):
-bar = "█" * int(30 * fitness / max(max_fitness, 0.01))
-report += f"Gen {i:3d}: {bar} {fitness:.3f}\n"
-report += "```\n"
+        report += "\n## All Camouflaged Variants\n\n"
+        report += "| Strategy | Score | Bypass % |\n"
+        report += "|----------|-------|----------|\n"
+        report += f"| Original | {results['original_detection_score']:.3f} | {results['original_bypass_probability']:.1%} |\n"
+        for variant in results["camouflaged_payloads"]:
+            report += f"| {variant['strategy']} | {variant['score']:.3f} | {variant['bypass_probability']:.1%} |\n"
 
-report += "\n## All Camouflaged Variants\n\n"
-report += "| Strategy | Score | Bypass % |\n"
-report += "|----------|-------|----------|\n"
-report += f"| Original | {results['original_detection_score']:.3f} | {results['original_bypass_probability']:.1%} |\n"
-for variant in results["camouflaged_payloads"]:
-report += f"| {variant['strategy']} | {variant['score']:.3f} | {variant['bypass_probability']:.1%} |\n"
-
-return report
+        return report
 
 # ============================================================
 # TEST FUNCTION
