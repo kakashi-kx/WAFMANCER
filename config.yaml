@@ -5,12 +5,12 @@ target:
   timeout: 10.0
   max_redirects: 5
   verify_ssl: true
-  user_agent: "Wafmancer-Research/2.0"
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 oracle:
-  max_probes: 100
-  concurrency: 10
-  probe_delay: 0.1
+  max_probes: 50
+  concurrency: 1          # 1 request at a time for bounty compliance
+  probe_delay: 0.6        # 600ms between probes (~1.6 req/sec — safe for 2/sec limit)
   decision_threshold: 0.95
   research_mode: true
 
@@ -31,3 +31,10 @@ output:
   research_dir: "research"
   data_dir: "data"
   report_format: "markdown"
+
+# Bounty-compliant scanning settings
+bounty:
+  concurrency: 1           # Never send parallel requests
+  delay_between_targets: 5 # 5 seconds between different targets
+  probe_delay: 0.6         # 600ms between probes (~1.6 req/sec)
+  max_probes_per_target: 15
