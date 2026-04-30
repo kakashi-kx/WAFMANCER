@@ -183,19 +183,16 @@ class ResponseOracle:
         """
         Systematically map the WAF's decision boundary using multiple mutations.
 
-        This is the core Oracle operation — it doesn't just test payloads,
-        it learns the WAF's behavior patterns.
-
         Args:
             client: HTTP client
             mutations: List of (name, headers) mutation pairs
             bodies: Optional list of request bodies corresponding to mutations
 
         Returns:
-            Complete list of probe results
+            Complete list of probe results (excluding failed probes)
         """
         semaphore = asyncio.Semaphore(self.concurrency)
-        results: List[ProbeResult] = []
+        results: List[Optional[ProbeResult]] = []
 
         async def bounded_probe(
             name: str,
@@ -235,7 +232,9 @@ class ResponseOracle:
 
         await asyncio.gather(*tasks)
 
-        return results
+        # Filter out None results from failed probes
+        valid_results = [r for r in results if r is not None]
+        return valid_results
 
     async def run(self) -> OracleSession:
         """
