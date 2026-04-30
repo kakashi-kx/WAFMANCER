@@ -683,12 +683,13 @@ def stats():
     # Top WAFs
     if data.get("top_wafs"):
         console.print()
-        waf_list = "\n".join(
-            f"[{C.TEAL}]▸[/] [{C.SILVER}]{waf}[/] [{C.DIM}]{chr(8212)} {count} sessions[/]"
-            for waf, count in data["top_wafs"].items()
-        )
+        waf_lines = []
+        for waf, count in data["top_wafs"].items():
+            line = f"[{C.TEAL}]▸[/] [{C.SILVER}]{waf}[/] " + f"[{C.DIM}]-- {count} sessions[/]"
+            waf_lines.append(line)
+        
         console.print(Panel(
-            Text.from_markup(waf_list),
+            Text.from_markup("\n".join(waf_lines)),
             border_style=C.BLUE,
             box=ROUNDED,
             padding=(1, 2),
