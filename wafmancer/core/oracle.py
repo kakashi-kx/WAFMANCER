@@ -90,14 +90,6 @@ class ResponseOracle:
         max_probes: Optional[int] = None,
         concurrency: Optional[int] = None,
     ) -> None:
-        """
-        Initialize the Oracle for a target.
-
-        Args:
-            target: The target URL to analyze
-            max_probes: Maximum number of probes to send
-            concurrency: Maximum concurrent probes
-        """
         self.target = target
         self.max_probes = max_probes or config.get("oracle", "max_probes", default=1000)
         self.concurrency = concurrency or config.get("oracle", "concurrency", default=10)
@@ -115,27 +107,12 @@ class ResponseOracle:
         )
 
     async def establish_baseline(self, client: AsyncResearchClient) -> ProbeResult:
-        """
-        Send a baseline probe to establish normal WAF behavior.
-        This is the control against which all mutations are compared.
-        """
+        """Send a baseline probe to establish normal WAF behavior."""
         headers = {"Accept": "*/*", "Accept-Language": "en-US,en;q=0.9"}
-
-        request, response = await client.probe(
-            self.target,
-            method="GET",
-            headers=headers,
-        )
-
+        request, response = await client.probe(self.target, method="GET", headers=headers)
         baseline = ProbeResult(request=request, response=response)
-
-        logger.info(
-            "baseline_established",
-            status=response.status_code,
-            length=response.body_length,
-            server=response.server_header,
-        )
-
+        logger.info("baseline_established", status=response.status_code, 
+                   length=response.body_length, server=response.server_header)
         return baseline
 
     async def probe_boundary(
@@ -144,33 +121,19 @@ class ResponseOracle:
         mutation: str,
         headers: Dict[str, str],
         body: Optional[bytes] = None,
+        url_suffix: Optional[str] = None,
     ) -> ProbeResult:
-        """
-        Send a mutated probe and compare against the baseline.
+        """Send a mutated probe and compare against the baseline."""
+        target_url = self.target
+        if url_suffix:
+            target_url = target_url.rstrip("/") + url_suffix
 
-        Args:
-            client: HTTP client
-            mutation: Description of the mutation being tested
-            headers: Mutated headers to test
-            body: Optional request body
-
-        Returns:
-            Complete ProbeResult with diff analysis
-        """
-        request, response = await client.probe(
-            self.target,
-            method="GET" if not body else "POST",
-            headers=headers,
-            body=body,
-        )
-
+        method = "GET" if not body else "POST"
+        request, response = await client.probe(target_url, method=method, headers=headers, body=body)
         result = ProbeResult(request=request, response=response)
 
         if self.session.baseline:
-            result.diff = self.diff_engine.compare(
-                self.session.baseline.response,
-                response,
-            )
+            result.diff = self.diff_engine.compare(self.session.baseline.response, response)
 
         return result
 
@@ -179,118 +142,89 @@ class ResponseOracle:
         client: AsyncResearchClient,
         mutations: List[Tuple[str, Dict[str, str]]],
         bodies: Optional[List[Optional[bytes]]] = None,
+        url_suffixes: Optional[List[Optional[str]]] = None,
     ) -> List[ProbeResult]:
-        """
-        Systematically map the WAF's decision boundary using multiple mutations.
-
-        Args:
-            client: HTTP client
-            mutations: List of (name, headers) mutation pairs
-            bodies: Optional list of request bodies corresponding to mutations
-
-        Returns:
-            Complete list of probe results (excluding failed probes)
-        """
+        """Systematically map the WAF's decision boundary using multiple mutations."""
         semaphore = asyncio.Semaphore(self.concurrency)
-        results: List[Optional[ProbeResult]] = []
+        results: List[ProbeResult] = []
 
         async def bounded_probe(
             name: str,
             headers: Dict[str, str],
             body: Optional[bytes] = None,
+            url_suffix: Optional[str] = None,
         ) -> None:
             async with semaphore:
                 try:
-                    result = await self.probe_boundary(client, name, headers, body)
+                    result = await self.probe_boundary(client, name, headers, body, url_suffix)
                     results.append(result)
-
                     if result.is_anomaly:
-                        logger.warning(
-                            "boundary_anomaly_detected",
-                            mutation=name,
-                            severity=result.diff.severity.name if result.diff else "UNKNOWN",
-                        )
+                        logger.warning("boundary_anomaly_detected", mutation=name,
+                                     severity=result.diff.severity.name if result.diff else "UNKNOWN")
                         self.session.anomalies.append(result.diff)
-
                     if result.is_bypass:
-                        logger.critical(
-                            "potential_bypass_detected",
-                            mutation=name,
-                            details=result.diff.research_notes if result.diff else [],
-                        )
+                        logger.critical("potential_bypass_detected", mutation=name,
+                                      details=result.diff.research_notes if result.diff else [])
                 except Exception as e:
                     logger.error("probe_failed", mutation=name, error=str(e))
 
-        # Run all probes concurrently (limited by semaphore)
-        if bodies:
-            tasks = [
-                bounded_probe(name, headers, body)
-                for (name, headers), body in zip(mutations, bodies)
-            ]
-        else:
-            tasks = [bounded_probe(name, headers) for name, headers in mutations]
+        # Build tasks based on what we have
+        tasks = []
+        for i, (name, headers) in enumerate(mutations):
+            body = bodies[i] if bodies and i < len(bodies) else None
+            url_suffix = url_suffixes[i] if url_suffixes and i < len(url_suffixes) else None
+            tasks.append(bounded_probe(name, headers, body, url_suffix))
 
         await asyncio.gather(*tasks)
-
-        # Filter out None results from failed probes
-        valid_results = [r for r in results if r is not None]
-        return valid_results
+        return [r for r in results if r is not None]
 
     async def run(self) -> OracleSession:
-        """
-        Execute a complete Oracle analysis session with WAF fingerprinting
-        and targeted mutation generation.
-
-        Returns:
-            Complete OracleSession with all findings
-        """
+        """Execute a complete Oracle analysis session."""
         logger.info("oracle_session_started", target=self.target)
 
         async with AsyncResearchClient(http2=True) as client:
-            # Phase 1: Establish baseline
+            # Phase 1: Baseline
             logger.info("phase_1_establishing_baseline")
             self.session.baseline = await self.establish_baseline(client)
 
-            # Phase 2: Fingerprint the WAF
+            # Phase 2: Fingerprint WAF
             logger.info("phase_2_fingerprinting_waf")
-            self.waf_signature = await self.fingerprinter.fingerprint(
-                self.session.baseline.response
-            )
+            self.waf_signature = await self.fingerprinter.fingerprint(self.session.baseline.response)
             self.session.waf_fingerprint = self.waf_signature
+            logger.info("waf_identified", vendor=self.waf_signature.vendor.value,
+                       confidence=f"{self.waf_signature.confidence:.1%}")
 
-            # Display fingerprint results
-            logger.info(
-                "waf_identified",
-                vendor=self.waf_signature.vendor.value,
-                confidence=f"{self.waf_signature.confidence:.1%}",
-            )
-
-            # Phase 3: Generate targeted mutations
+            # Phase 3: Generate mutations
             logger.info("phase_3_generating_mutations")
             self.mutation_engine = SmartMutationEngine(self.waf_signature)
+            priority_mutations = self.mutation_engine.generate_priority_mutations(limit=self.max_probes)
 
-            # Get priority mutations with bodies
-            priority_mutations = self.mutation_engine.generate_priority_mutations(
-                limit=self.max_probes
-            )
+            # Unpack 5-tuple: (name, headers, body, priority, url_suffix)
+            mutations = []
+            bodies = []
+            url_suffixes = []
+            
+            for item in priority_mutations:
+                name = item[0]
+                headers = item[1]
+                body = item[2] if len(item) > 2 else None
+                # item[3] is priority score - skip
+                url_suffix = item[4] if len(item) > 4 else None
+                
+                mutations.append((name, headers))
+                bodies.append(body)
+                url_suffixes.append(url_suffix)
 
-            # Extract mutations and bodies
-            mutations = [(name, headers) for name, headers, _, _ in priority_mutations]
-            bodies = [body for _, _, body, _ in priority_mutations]
+            logger.info("mutations_prepared", total=len(mutations),
+                       targeted=self.waf_signature.vendor.value != "Unknown WAF")
 
-            logger.info(
-                "mutations_prepared",
-                total=len(mutations),
-                targeted=self.waf_signature.vendor.value != "Unknown WAF",
-            )
-
-            # Phase 4: Map decision boundary with targeted mutations
+            # Phase 4: Map boundary
             logger.info("phase_4_mapping_decision_boundary")
             self.session.probes = await self.map_decision_boundary(
-                client, mutations, bodies
+                client, mutations, bodies, url_suffixes
             )
 
-        # Phase 5: Compute statistics
+        # Phase 5: Statistics
         self.session.statistics = {
             "total_probes": len(self.session.probes),
             "anomalies_found": len(self.session.anomalies),
@@ -304,95 +238,11 @@ class ResponseOracle:
             "waf_confidence": f"{self.waf_signature.confidence:.1%}" if self.waf_signature else "N/A",
         }
 
-        logger.info(
-            "oracle_session_complete",
-            **self.session.statistics,
-        )
-
+        logger.info("oracle_session_complete", **self.session.statistics)
         return self.session
 
-    def _generate_research_mutations(self) -> List[Tuple[str, Dict[str, str]]]:
-        """
-        Generate a research-grade set of mutations designed to probe
-        the WAF's decision boundary at multiple points.
-
-        This is the fallback method when no WAF fingerprint is available.
-        For fingerprinted WAFs, use the SmartMutationEngine instead.
-
-        Returns:
-            List of (mutation_name, headers_dict) tuples
-        """
-        benign_headers = {
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-
-        mutations = [
-            # HTTP Verb Tampering
-            ("verb_override_xhttpmethod",
-             {**benign_headers, "X-HTTP-Method-Override": "POST"}),
-            ("verb_override_xmethod",
-             {**benign_headers, "X-Method-Override": "DELETE"}),
-
-            # Content-Type Boundary Tests
-            ("content_type_xml",
-             {**benign_headers, "Content-Type": "application/xml"}),
-            ("content_type_json_unicode",
-             {**benign_headers, "Content-Type": "application/json; charset=utf-16"}),
-
-            # Path Traversal Indicators
-            ("path_traversal_enc_dot",
-             {**benign_headers, "X-Original-URL": "/../../etc/passwd"}),
-            ("path_traversal_url_enc",
-             {**benign_headers, "X-Rewrite-URL": "%2e%2e%2f%2e%2e%2f"}),
-
-            # Hop-by-Hop Header Injection (Smuggling Vector)
-            ("hop_byhop_connection",
-             {**benign_headers, "Connection": "keep-alive, X-Bypass"}),
-
-            # Unicode Normalization Boundary
-            ("unicode_nfd",
-             {**benign_headers, "X-Test": "caf\\u00e9"}),
-            ("unicode_nfkc",
-             {**benign_headers, "X-Test": "①\\u2460"}),
-
-            # Smuggling Header Variants
-            ("smug_transfer_encoding",
-             {**benign_headers, "Transfer-Encoding": "chunked"}),
-            ("smug_content_length_deviation",
-             {**benign_headers, "Content-Length": "0", "Transfer-Encoding": "identity"}),
-
-            # Header Injection Attempts
-            ("header_injection_crlf",
-             {**benign_headers, "X-Injected": "test\\r\\nInjected: true"}),
-            ("header_injection_newline",
-             {**benign_headers, "X-Injected": "test\\nInjected: true"}),
-
-            # Protocol Boundary
-            ("scheme_relative",
-             {**benign_headers, "X-Forwarded-Proto": "file"}),
-
-            # SQL Injection Indicator (to trigger WAF)
-            ("sqli_simple",
-             {**benign_headers, "X-Query": "' OR 1=1 --"}),
-            ("sqli_encoded",
-             {**benign_headers, "X-Query": "%27%20OR%201%3D1"}),
-
-            # XSS Indicator (to trigger WAF)
-            ("xss_basic",
-             {**benign_headers, "X-Input": "<script>alert(1)</script>"}),
-        ]
-
-        logger.info("mutations_generated", count=len(mutations))
-        return mutations[:self.max_probes]
-
     def generate_report(self) -> str:
-        """
-        Generate a comprehensive research report from the Oracle session.
-
-        Returns:
-            Markdown-formatted research report
-        """
+        """Generate a comprehensive research report."""
         stats = self.session.statistics
 
         report = f"""# WAFMANCER Response Oracle — Research Report
@@ -411,7 +261,6 @@ class ResponseOracle:
 ## WAF Fingerprint
 """
 
-        # Add WAF fingerprint details if available
         if self.waf_signature and self.waf_signature.vendor.value != "No WAF Detected":
             report += f"""
 - **Vendor:** {self.waf_signature.vendor.value}
@@ -420,12 +269,10 @@ class ResponseOracle:
 """
             for evidence in self.waf_signature.evidence:
                 report += f"  - {evidence}\n"
-
             if self.waf_signature.known_vulnerabilities:
                 report += "\n- **Known Bypass Vectors:**\n"
                 for vuln in self.waf_signature.known_vulnerabilities:
                     report += f"  - {vuln}\n"
-
             if self.waf_signature.suggested_mutations:
                 report += "\n- **Suggested Mutations:**\n"
                 for mutation in self.waf_signature.suggested_mutations:
@@ -444,7 +291,7 @@ class ResponseOracle:
 
         if self.session.anomalies:
             report += "\n## Anomaly Details\n\n"
-            for anomaly in self.session.anomalies[:10]:  # Top 10
+            for anomaly in self.session.anomalies[:10]:
                 report += f"### Severity: {anomaly.severity.name}\n"
                 for a in anomaly.anomalies:
                     report += f"- {a}\n"
@@ -454,18 +301,3 @@ class ResponseOracle:
                 report += "\n"
 
         return report
-
-
-# Simple test function for development
-async def quick_test(target: str = "https://httpbin.org/get"):
-    """Quick test function for Oracle development."""
-    oracle = ResponseOracle(target, max_probes=5)
-    session = await oracle.run()
-    print(oracle.generate_report())
-    return session
-
-
-if __name__ == "__main__":
-    import sys
-    target = sys.argv[1] if len(sys.argv) > 1 else "https://httpbin.org/get"
-    asyncio.run(quick_test(target))
