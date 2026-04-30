@@ -684,7 +684,7 @@ def stats():
     if data.get("top_wafs"):
         console.print()
         waf_list = "\n".join(
-            f"[{C.TEAL}]▸[/] [{C.SILVER}]{waf}[/] [{C.DIM]}— {count} sessions[/]"
+            f"[{C.TEAL}]▸[/] [{C.SILVER}]{waf}[/] [{C.DIM}]{chr(8212)} {count} sessions[/]"
             for waf, count in data["top_wafs"].items()
         )
         console.print(Panel(
