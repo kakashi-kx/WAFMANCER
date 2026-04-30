@@ -1,29 +1,7 @@
 
 
 ```markdown
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--                     ADD YOUR SCREENSHOTS BELOW                         -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 
-<!-- SCREENSHOT 1: Main banner and module list -->
- screenshots/Screenshot_2026-04-30_20_21_30.png
-
-<!-- SCREENSHOT 2: Oracle scanning a target -->
-<!-- Replace with: ![Oracle Scan](screenshots/oracle_scan.png) -->
-
-<!-- SCREENSHOT 3: Bypass found against Cloudflare -->
-<!-- Replace with: ![Cloudflare Bypass](screenshots/cloudflare_bypass.png) -->
-
-<!-- SCREENSHOT 4: Exfiltrated data display -->
-<!-- Replace with: ![Data Exfiltration](screenshots/data_exfil.png) -->
-
-<!-- SCREENSHOT 5: Statistics dashboard -->
-<!-- Replace with: ![Stats Dashboard](screenshots/stats.png) -->
-
-<!-- SCREENSHOT 6: Bounty mode results -->
-<!-- Replace with: ![Bounty Mode](screenshots/bounty_mode.png) -->
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 
 
 <p align="center">
