@@ -868,28 +868,30 @@ report += f"| {variant['strategy']} | {variant['score']:.3f} | {variant['bypass_
 
 return report
 
-═══════════════════════════════════════════════════════════════
-TEST FUNCTION
-═══════════════════════════════════════════════════════════════
+# ============================================================
+# TEST FUNCTION
+# ============================================================
+
 async def quick_test():
-"""Quick test of Neuro-Camouflage."""
-neuro = NeuroCamouflage(population_size=10, generations=10)
+    """Quick test of Neuro-Camouflage."""
+    neuro = NeuroCamouflage(population_size=10, generations=10)
+    
+    test_payloads = [
+        "<script>alert(document.cookie)</script>",
+        "' OR 1=1 --",
+        "../../../etc/passwd",
+        "eval('cat /etc/shadow')",
+    ]
+    
+    for payload in test_payloads:
+        print(f"\n{'='*60}")
+        print(f"Original: {payload}")
+        results = await neuro.camouflage(payload)
+        print(neuro.generate_report(results))
 
-test_payloads = [
-"<script>alert(document.cookie)</script>",
-"' OR 1=1 --",
-"../../../etc/passwd",
-"eval('cat /etc/shadow')",
-]
 
-for payload in test_payloads:
-print(f"\n{'='*60}")
-print(f"Original: {payload}")
-results = await neuro.camouflage(payload)
-print(neuro.generate_report(results))
-
-if name == "main":
-asyncio.run(quick_test())
+if __name__ == "__main__":
+    asyncio.run(quick_test())
 
 
 
