@@ -222,6 +222,9 @@ class GeneticEvolutionEngine:
         original.detection_score = DetectionSimulator.score_payload(original.content)
         original.fitness_score = 1.0 - original.detection_score
         population = self._create_initial_population(original)
+        population = self._create_initial_population(original)
+        # Count initial mutations
+        total_mutations = self.population_size - 1
         population_history = [population.copy()]
         fitness_curve = [self._calculate_population_fitness(population)]
         total_mutations = 0
@@ -274,12 +277,16 @@ class GeneticEvolutionEngine:
         return result
 
     def _create_initial_population(self, original: Payload) -> List[Payload]:
-        population = [original]
-        for _ in range(self.population_size - 1):
-            mutated = self._mutate(original.content, original.category)
-            variant = Payload(content=mutated, category=original.category, parent_ids=[original.id])
-            population.append(variant)
-        return population
+    population = [original]
+    # Create duplicates of the original for a fair starting point
+    for _ in range(self.population_size - 1):
+        variant = Payload(
+            content=original.content, 
+            category=original.category, 
+            parent_ids=[original.id]
+        )
+        population.append(variant)
+    return population
 
     def _tournament_select(self, population: List[Payload], tournament_size: int = 3) -> Payload:
         tournament = random.sample(population, min(tournament_size, len(population)))
@@ -370,7 +377,7 @@ class NeuroCamouflage:
             return PayloadCategory.SQLI
         elif re.search(r"\.\.\/|\.\.\\|\/etc\/|C:\\\\", content):
             return PayloadCategory.PATH_TRAVERSAL
-        elif re.search(r"cmd|bash|wget|curl|system|exec", content, re.IGNORECASE):
+        elif re.search(r"cmd|bash|sh |wget|curl|system|exec|cat |ls |rm |nc |netcat", content, re.IGNORECASE):
             return PayloadCategory.COMMAND_INJECTION
         elif re.search(r"<!ENTITY|SYSTEM", content, re.IGNORECASE):
             return PayloadCategory.XXE
@@ -393,6 +400,15 @@ class NeuroCamouflage:
             "evolution_result": None, "best_payload": None,
             "best_score": original_score, "improvement": 0.0, "improvement_percent": 0.0,
         }
+
+         if original_score <= self.target_score:
+            results["best_payload"] = payload
+            results["best_score"] = original_score
+            results["improvement"] = 0.0
+            results["improvement_percent"] = 0.0
+            logger.info("neuro_camouflage_skipped", reason="payload_already_benign")
+            return results                    
+                             
         logger.info("neuro_camouflage_started", payload_length=len(payload),
                    category=category.value, original_score=f"{original_score:.3f}")
 
