@@ -953,7 +953,7 @@ def corrupt(target, payload, waf, requests, no_synthesize, output):
     
     try:
         with console.status(f"[{C.PURPLE}]Mapping trust decay curve...[/]", spinner="dots"):
-            results = asyncio.run(run_corrupt())
+                results = asyncio.run(run_corrupt())
         
         # WAF Profile
         if results.get("tactical_profile"):
@@ -997,10 +997,12 @@ def corrupt(target, payload, waf, requests, no_synthesize, output):
             bypass = inj["bypass_successful"]
             result_color = C.GREEN if bypass else C.RED
             result_text = "✅ BYPASS SUCCESSFUL" if bypass else "❌ BLOCKED"
+            attack_type = inj.get("attack_type", "unknown").upper()
             
             console.print()
             console.print(Panel(
                 Text.from_markup(
+                    f"[{C.SILVER}]▸ Attack Type:[/] [{C.PURPLE}]{attack_type}[/]\n"
                     f"[{C.SILVER}]▸ Status:[/] [{result_color}]{inj['status_code']} — {result_text}[/]\n"
                     f"[{C.SILVER}]▸ Response Length:[/] [{C.WHITE}]{inj['response_length']} bytes[/]\n"
                     f"[{C.SILVER}]▸ Response Time:[/] [{C.WHITE}]{inj['response_time']:.3f}s[/]\n"
@@ -1011,6 +1013,53 @@ def corrupt(target, payload, waf, requests, no_synthesize, output):
                 padding=(1, 3),
                 title=f"[bold {result_color}]💉 INJECTION RESULT[/]",
                 title_align="center",
+            ))
+        
+        # ══════════════════════════════════════════════════
+        # EXFILTRATED DATA — THE MONEY SHOT
+        # ══════════════════════════════════════════════════
+        if results.get("exfiltrated_data"):
+            console.print()
+            attack_type = results.get("injection_result", {}).get("attack_type", "unknown")
+            
+            type_colors = {
+                "path_traversal": C.GREEN,
+                "sql_injection": C.GOLD,
+                "command_injection": C.RED,
+                "xss": C.ORANGE,
+            }
+            color = type_colors.get(attack_type, C.TEAL)
+            
+            type_labels = {
+                "path_traversal": "📂 FILE CONTENTS",
+                "sql_injection": "🗄️ DATABASE DUMP",
+                "command_injection": "💻 COMMAND OUTPUT",
+                "xss": "🔥 REFLECTED XSS",
+            }
+            label = type_labels.get(attack_type, "📄 EXFILTRATED DATA")
+            
+            console.print(Panel(
+                Text(results["exfiltrated_data"][:1500], style=C.GREEN),
+                border_style=C.GREEN,
+                box=HEAVY,
+                padding=(1, 2),
+                title=f"[bold {color}]💀 {label}[/]",
+                title_align="center",
+            ))
+        
+        # Full Response Body
+        if results.get("injection_result", {}).get("response_body"):
+            response_body = results["injection_result"]["response_body"]
+            inj = results["injection_result"]
+            
+            console.print()
+            console.print(Panel(
+                Text(response_body[:2000], style=C.SILVER),
+                border_style=C.TEAL,
+                box=ROUNDED,
+                padding=(1, 2),
+                title=f"[bold {C.TEAL}]📄 SERVER RESPONSE — {inj['status_code']} — {inj['response_length']} bytes[/]",
+                title_align="left",
             ))
         
         # Advantages & Disadvantages
