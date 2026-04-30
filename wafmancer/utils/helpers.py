@@ -3,7 +3,9 @@ Utility functions for WAFMANCER.
 """
 
 import hashlib
+import math
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.parse import urlparse, urlunparse
@@ -71,15 +73,13 @@ def calculate_entropy(data: bytes) -> float:
     if not data:
         return 0.0
 
-    from collections import Counter
-
     length = len(data)
     counter = Counter(data)
 
     entropy = 0.0
     for count in counter.values():
         probability = count / length
-        entropy -= probability * (probability.bit_length() - 1)
+        entropy -= probability * math.log2(probability)
 
     return min(entropy, 8.0)
 
