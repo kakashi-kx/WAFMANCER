@@ -41,12 +41,7 @@
   <img src="https://img.shields.io/badge/WAF-ModSecurity-gray?style=flat-square" alt="ModSecurity">
 </p>
 
-<h1 align="center">
-  <br>
-  WAFMANCER v2.0
-  <br>
-</h1>
-
+<h1 align="center">WAFMANCER v2.0</h1>
 <h4 align="center">Next-Generation WAF Evasion Research Framework</h4>
 
 <p align="center">
@@ -58,7 +53,7 @@
 </p>
 
 <p align="center">
-  <b>crafted by :: <a href="https://github.com/kakashi4kx">kakashi4kx</a> / <a href="https://github.com/kakashi-kx">kakashi-kx</a></b>
+  <b>crafted by :: <a href="https://github.com/kakashi-kx">kakashi-kx</a></b>
 </p>
 
 ---
