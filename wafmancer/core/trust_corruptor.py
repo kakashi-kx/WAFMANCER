@@ -317,7 +317,7 @@ class TrustCorruptor:
             for i in range(injection_point):
                 await client.probe(self.target, headers=benign_headers)
                 await asyncio.sleep(random.uniform(1.5, 3.0))  # Slower, more human-like
-            attack_type = self._detect_attack_type(delivery_payload)
+            attack_type = self._detect_attack_type(payload)  # Use original for detection
             logger.info("crafting_exploit", attack_type=attack_type)
             exploit_request = self._craft_exploit_request(delivery_payload, attack_type, benign_headers)
             logger.info("injecting_exploit_payload")
