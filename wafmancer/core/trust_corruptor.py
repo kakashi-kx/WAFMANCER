@@ -206,7 +206,7 @@ class TrustDecayMapper:
                 )
                 decay_points.append(point)
                 logger.debug("trust_point_mapped", request=i, trust_score=f"{trust_score:.3f}")
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(random.uniform(2.0, 4.0))  # Random delay 2-4 seconds
             except Exception as e:
                 logger.error("trust_probe_failed", request=i, error=str(e))
                 decay_points.append(TrustDecayPoint(
@@ -233,7 +233,8 @@ class TrustDecayMapper:
         elif response.status_code == 403:
             score -= 0.3
         elif response.status_code == 429:
-            score -= 0.4
+            score -= 0.8
+            logger.warning("rate_limited", request=request_number)
         if response.elapsed_seconds < 1.0:
             score += 0.1
         if response.body_length > 1000:
@@ -315,7 +316,7 @@ class TrustCorruptor:
             }
             for i in range(injection_point):
                 await client.probe(self.target, headers=benign_headers)
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(random.uniform(1.5, 3.0))  # Slower, more human-like
             attack_type = self._detect_attack_type(delivery_payload)
             logger.info("crafting_exploit", attack_type=attack_type)
             exploit_request = self._craft_exploit_request(delivery_payload, attack_type, benign_headers)
