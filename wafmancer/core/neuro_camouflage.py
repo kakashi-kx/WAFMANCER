@@ -276,11 +276,14 @@ class GeneticEvolutionEngine:
                    best_score=f"{result.best_payload.detection_score:.3f}")
         return result
 
-        def _create_initial_population(self, original: Payload) -> List[Payload]:
+    def _create_initial_population(self, original: Payload) -> List[Payload]:
         population = [original]
         for _ in range(self.population_size - 1):
-            mutated = original.content  # <-- FIXED: don't mutate in initial population
-            variant = Payload(content=mutated, category=original.category, parent_ids=[original.id])
+            variant = Payload(
+                content=original.content,
+                category=original.category,
+                parent_ids=[original.id]
+            )
             population.append(variant)
         return population
 
