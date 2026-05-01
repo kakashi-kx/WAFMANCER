@@ -1127,5 +1127,80 @@ def corrupt(target, payload, waf, requests, no_synthesize, output):
     
     display_footer()
 
+@main.command()
+@click.option("-t", "--target", required=True, help="Target URL to analyze")
+@click.option("--probes", default=None, type=int, help="Maximum number of probes")
+@click.option("--concurrency", default=None, type=int, help="Maximum concurrent probes")
+@click.option("--output", "-o", default=None, help="Output file for research report")
+@click.option("--no-save", is_flag=True, help="Don't save results to research database")
+def oracle(target, probes, concurrency, output, no_save):
+    """
+    Run the Response Oracle against a target.
+    
+    Maps WAF decision boundaries through systematic probing
+    with fingerprinting and targeted mutation generation.
+    """
+    display_banner()
+    
+    target_url = normalize_target_url(target)
+    
+    if probes:
+        config._config["oracle"]["max_probes"] = probes
+    if concurrency:
+        config._config["oracle"]["concurrency"] = concurrency
+    
+    actual_probes = probes or config.get("oracle", "max_probes", default=20)
+    display_scan_header(target_url, actual_probes)
+    
+    oracle_engine = ResponseOracle(target_url)
+    
+    async def run():
+        return await oracle_engine.run()
+    
+    try:
+        with console.status(f"[{C.PURPLE}]◈ Oracle analyzing target...[/]", spinner="dots"):
+            session = asyncio.run(run())
+        
+        if session.waf_fingerprint:
+            display_waf_fingerprint(session.waf_fingerprint)
+        
+        display_results_table(session.statistics)
+        
+        display_anomaly_details(
+            session.anomalies,
+            waf_bypass_suggestions=(
+                session.waf_fingerprint.suggested_mutations 
+                if session.waf_fingerprint else None
+            ),
+            known_vulns=(
+                session.waf_fingerprint.known_vulnerabilities 
+                if session.waf_fingerprint else None
+            ),
+        )
+        
+        report = oracle_engine.generate_report()
+        report_dir = Path(config.get("output", "research_dir", default="research"))
+        report_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = report_dir / f"report_{timestamp}.md"
+        report_path.write_text(report)
+        
+        session_id = None
+        if not no_save:
+            try:
+                store = ResearchStore()
+                session_id = store.save_session(session)
+                store.close()
+            except Exception:
+                pass
+        
+        display_save_confirmation(session_id or 0, str(report_path))
+        
+    except Exception as e:
+        console.print(f"\n[{C.RED}]◈ Error:[/] {e}")
+        sys.exit(1)
+    
+    display_footer()
+
 if __name__ == "__main__":
     main()
