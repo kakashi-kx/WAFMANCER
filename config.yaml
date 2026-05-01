@@ -1,40 +1,62 @@
-# WAFMANCER Configuration
-# ========================
+# ═══════════════════════════════════════════════════════════════
+#  WAFMANCER v2.0 — Configuration
+#  crafted by :: kakashi4kx / kakashi-kx
+# ═══════════════════════════════════════════════════════════════
 
+# ── Target Settings ──────────────────────────────────────────
 target:
-  timeout: 10.0
-  max_redirects: 5
-  verify_ssl: true
+  timeout: 30.0                                    # Request timeout (seconds)
+  max_redirects: 5                                  # Max redirects to follow
+  verify_ssl: true                                  # SSL verification
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+# ── Oracle Settings ──────────────────────────────────────────
 oracle:
-  max_probes: 50
-  concurrency: 1          # 1 request at a time for bounty compliance
-  probe_delay: 0.6        # 600ms between probes (~1.6 req/sec — safe for 2/sec limit)
-  decision_threshold: 0.95
-  research_mode: true
+  max_probes: 50                                    # Max probes per scan
+  concurrency: 1                                    # Concurrent requests (1 = bounty-safe)
+  probe_delay: 0.6                                  # Delay between probes (seconds, ~1.6 req/sec)
+  decision_threshold: 0.95                          # Anomaly detection sensitivity
+  research_mode: true                               # Save all request/response data
 
+# ── Logging Settings ─────────────────────────────────────────
 logging:
-  level: "INFO"
-  format: "json"
-  output_dir: "logs"
-  save_requests: true
-  save_responses: true
+  level: "INFO"                                     # DEBUG, INFO, WARNING, ERROR
+  format: "json"                                    # structured or json
+  output_dir: "logs"                                # Log output directory
+  save_requests: true                               # Log full request data
+  save_responses: true                              # Log full response data
 
+# ── Plugin Settings ──────────────────────────────────────────
 plugins:
   enabled:
-    - "fuzzer"
+    - "fuzzer"                                      # Enabled plugins
   load_paths:
-    - "wafmancer.plugins"
+    - "wafmancer.plugins"                           # Plugin search paths
 
+# ── Output Settings ──────────────────────────────────────────
 output:
-  research_dir: "research"
-  data_dir: "data"
-  report_format: "markdown"
+  research_dir: "research"                          # Report output directory
+  data_dir: "data"                                  # Database directory
+  report_format: "markdown"                         # markdown or json
 
-# Bounty-compliant scanning settings
+# ── Bounty Mode Settings ─────────────────────────────────────
 bounty:
-  concurrency: 1           # Never send parallel requests
-  delay_between_targets: 5 # 5 seconds between different targets
-  probe_delay: 0.6         # 600ms between probes (~1.6 req/sec)
-  max_probes_per_target: 15
+  concurrency: 1                                    # Never send parallel requests
+  delay_between_targets: 5                          # Seconds between different targets
+  probe_delay: 0.6                                  # Delay between probes (~1.6 req/sec)
+  max_probes_per_target: 15                         # Probes per target in bounty mode
+
+# ── Trust Corruptor Settings ─────────────────────────────────
+trust_corruptor:
+  max_benign_requests: 20                           # Max benign requests for trust building
+  trust_decay_delay: 3.0                            # Delay between trust probes (seconds)
+  injection_delay: 2.0                              # Delay before injecting payload
+  synthesize_first: true                            # Run neural synthesis before corrupting
+
+# ── Neural Exploit Settings ──────────────────────────────────
+neural:
+  population_size: 30                               # Payloads per generation
+  generations: 50                                   # Max evolution generations
+  mutation_rate: 0.3                                # Mutation probability (0.0-1.0)
+  target_score: 0.15                                # Stop when detection score reaches this
+  techniques_per_chain: 5                           # Obfuscation layers per payload
